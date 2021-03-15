@@ -49,7 +49,7 @@ local INT53_MAX  = 281474976710655     -- (2^48) -1  [6 bytes]
    @field      {Object} A referencia para o campo
    @value      {int32}  Valor que será serializado
 ]]
-local function encode_field_int32(header, field, value)
+local function encode_int32(header, field, value)
 
    if value == nil or type(value) ~= 'number' then
       -- invalid, ignore
@@ -134,9 +134,9 @@ local function encode_field_int32(header, field, value)
 end
 
 --[[
-   Faz a decodifiação do EXTRA de um int32, ver `encode_field_int32(header, fieldId, value)`
+   Faz a decodifiação do EXTRA de um int32, ver `encode_int32(header, fieldId, value)`
 
-   @byteExtra  {int8} O {EXTRA} byte que foi gerado pelo método `encode_field_int32(header, fieldId, value)`
+   @byteExtra  {int8} O {EXTRA} byte que foi gerado pelo método `encode_int32(header, fieldId, value)`
 
    @return {object} informações contidas no {EXTRA}
 ]]
@@ -164,9 +164,9 @@ local function decode_int32_extra_byte(byteExtra)
 end
 
 --[[
-   Faz a decodifiação dos bytes que compoem um int32, ver função `encode_field_int32(header, fieldId, value)` 
+   Faz a decodifiação dos bytes que compoem um int32, ver função `encode_int32(header, fieldId, value)` 
 
-   @bytes      {int8[]} O bytes que foram gerados pelo método `encode_field_int32(header, fieldId, value)`
+   @bytes      {int8[]} O bytes que foram gerados pelo método `encode_int32(header, fieldId, value)`
    @isNegative {bool}   O valor é negativo (informação está no {EXTRA} byte)
 
    @return {int32}
@@ -253,7 +253,7 @@ local INT32_ARRAY_EXTRA_BITMASK_NUM_BYTES = {
    @field      {Object}    A referencia para o campo
    @values     {int32[]}   Os valores que serão serializados
 ]]
-local function encode_field_int32_array(header, field, values)
+local function encode_int32_array(header, field, values)
    if values == nil or #values == 0 then
       -- ignore
       return '' 
@@ -362,9 +362,9 @@ local function encode_field_int32_array(header, field, values)
 end
 
 --[[
-   Faz a decodifiação do EXTRA de um int32, ver `encode_field_int32_array(header, fieldId, value)`
+   Faz a decodifiação do EXTRA de um int32, ver `encode_int32_array(header, fieldId, value)`
 
-   @byteExtra  {int8} O {EXTRA} byte que foi gerado pelo método `encode_field_int32_array(header, fieldId, value)`
+   @byteExtra  {int8} O {EXTRA} byte que foi gerado pelo método `encode_int32_array(header, fieldId, value)`
 
    @return {object} informações contidas no {EXTRA}
 ]]
@@ -393,10 +393,10 @@ end
 
 
 local Module = {}
-Module.encode_field_int32            = encode_field_int32
+Module.encode_int32            = encode_int32
 Module.decode_int32_extra_byte       = decode_int32_extra_byte
 Module.decode_int32_bytes            = decode_int32_bytes
-Module.encode_field_int32_array      = encode_field_int32_array
+Module.encode_int32_array      = encode_int32_array
 Module.decode_int32_array_extra_byte = decode_int32_array_extra_byte
 Module.INT6_MAX                      = INT6_MAX
 Module.INT8_MAX                      = INT8_MAX

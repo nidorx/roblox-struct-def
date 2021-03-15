@@ -218,13 +218,40 @@ local function decode_char(header, char)
 end
 
 --[[
+   FIELD {8 bits} 
+      É a definição da chave do campo do esquema
+      Quando uma mensagem é codificada, as chaves e os valores são concatenados. Quando a mensagem está sendo 
+      decodificada, o analisador precisa ser capaz de pular os campos que não reconhece. Desta forma, novos campos 
+      podem ser adicionados a uma mensagem sem quebrar programas antigos que não os conhecem. Para esse fim, a "chave" 
+      para cada par em uma mensagem em formato de ligação é, na verdade, dois valores - o identificador do campo no 
+      schema, mais um tipo de ligação que fornece informações suficientes para encontrar o comprimento do valor 
+      a seguir.
 
-   @TODO: Replicar documentação do Serializer aqui
+      1 1 1 1 1 1 1 1
+      |   | | |     |
+      |   | | +-----+--- 4 bits  para identificar o campo, portanto, um schema pode ter no máximo 16 campos ((2^4)-1)
+      |   | |            
+      |   | +----------- 1 bit   IS ARRAY flag que determina se é array
+      |   |                         Exceção FIELD_TYPE_BITMASK_BOOL, que usa esse bit para guardar o valor
+      |   |
+      +---+------------- 3 bits  determina o FIELD_TYPE
 
-   @header        {Object} Referencia para o cabeçalho da serialização atual
-   @fieldId       {int4}   O id do field sendo serializado
-   @fieldTypeMask {int4}   Ver as constantes FIELD_TYPE_MASK_* 
-   @isArray       {bool}   É um array de itens sendo serializado?
+         FIELD_TYPE
+            |     mask    |    type    |       constant                |
+            | ----------- | ---------- | ------------------------------| 
+            | 0 0 0 00000 | bool       | FIELD_TYPE_BITMASK_BOOL       |
+            | 0 0 1 00000 | bool[]     | FIELD_TYPE_BITMASK_BOOL_ARRAY |
+            | 0 1 0 00000 | int32      | FIELD_TYPE_BITMASK_INT32      |
+            | 0 1 1 00000 | int53      | FIELD_TYPE_BITMASK_INT53      |
+            | 1 0 0 00000 | double     | FIELD_TYPE_BITMASK_DOUBLE     |
+            | 1 0 1 00000 | string     | FIELD_TYPE_BITMASK_STRING     |
+            | 1 1 0 00000 | ref        | FIELD_TYPE_BITMASK_SCHEMA     |
+            | 1 1 1 00000 | ref end    | FIELD_TYPE_BITMASK_SCHEMA_END |
+
+   @header     {object} Referencia para o cabeçalho da serialização atual
+   @fieldId    {int4}   O id do field sendo serializado
+   @fieldType  {int3}   Ver as constantes FIELD_TYPE_MASK_*
+   @isArray    {bool}   É um array de itens sendo serializado?
 
    @return char
 ]]

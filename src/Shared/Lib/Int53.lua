@@ -30,7 +30,7 @@ local INT53_EXTRA_BITMASK_NUM_BYTES = {
 }
 
 --[[
-   Lógica comum aos métodos encode_field_int53 e encode_field_int53_array
+   Lógica comum aos métodos encode_int53 e encode_int53_array
 
    Faz o encode de um int53, no formato <{EXTRA}[{VALUE}]?>
 
@@ -40,7 +40,7 @@ local INT53_EXTRA_BITMASK_NUM_BYTES = {
       | | | | | | | |
       | | | | | | +-+--- 2 bits  quantos bytes [chars] é usado pelo int32 do resto (4 valores)
       | | | | +-+------- 2 bits  quantos bytes [chars] é usado pelo int32 do multiplicador (4 valores)
-      | | | +----------- 1 bits  HAS_MORE? Usado pelo encode_field_int53_array para indicar continuidade
+      | | | +----------- 1 bits  HAS_MORE? Usado pelo encode_int53_array para indicar continuidade
       | | +------------- 1 bits  Número é maior que 32 bits, caso positivo foi quebrado em times e rest
       | +--------------- 1 bit   descartado
       +----------------- 1 bit   0 = POSITIVO, 1 = NEGATIVO
@@ -175,7 +175,7 @@ end
    @field      {Object} A referencia para o campo
    @value      {int32}  Valor que será serializado
 ]]
-local function encode_field_int53(header, field, value)
+local function encode_int53(header, field, value)
 
    if value == nil or type(value) ~= 'number' then
       -- invalid, ignore
@@ -199,9 +199,9 @@ local function encode_field_int53(header, field, value)
 end
 
 --[[
-   Faz a decodifiação do EXTRA de um int53, ver `encode_field_int53(header, fieldId, value)`
+   Faz a decodifiação do EXTRA de um int53, ver `encode_int53(header, fieldId, value)`
 
-   @byteExtra  {int8} O {EXTRA} byte que foi gerado pelo método `encode_field_int53(header, fieldId, value)`
+   @byteExtra  {int8} O {EXTRA} byte que foi gerado pelo método `encode_int53(header, fieldId, value)`
 
    @return {object} informações contidas no {EXTRA}
 ]]
@@ -218,9 +218,9 @@ local function decode_int53_extra_byte(byteExtra)
 end
 
 --[[
-   Faz a decodifiação dos bytes que compoem um int53, apenas quando é BIG, ver função `encode_field_int53(header, fieldId, value)` 
+   Faz a decodifiação dos bytes que compoem um int53, apenas quando é BIG, ver função `encode_int53(header, fieldId, value)` 
 
-   @bytes      {int8[]} O bytes que foram gerados pelo método `encode_field_int53(header, fieldId, value)`
+   @bytes      {int8[]} O bytes que foram gerados pelo método `encode_int53(header, fieldId, value)`
    @isNegative {bool}   O valor é negativo (informação está no {EXTRA} byte)
    @timesLen   {number} Quantos bytes faz parte do multiplicador x32
    @restLen    {number} Quantos bytes faz parte do resto
@@ -281,7 +281,7 @@ end
    @field      {Object}    A referencia para o campo
    @values     {int53[]}   Os valores que serão serializados
 ]]
-local function encode_field_int53_array(header, field, values)
+local function encode_int53_array(header, field, values)
    if values == nil or #values == 0 then
       -- ignore
       return '' 
@@ -311,8 +311,8 @@ end
 
 local Module = {}
 Module.encode_int53_out           = encode_int53_out
-Module.encode_field_int53         = encode_field_int53
+Module.encode_int53         = encode_int53
 Module.decode_int53_extra_byte    = decode_int53_extra_byte
 Module.decode_int53_bytes         = decode_int53_bytes
-Module.encode_field_int53_array   = encode_field_int53_array
+Module.encode_int53_array   = encode_int53_array
 return Module

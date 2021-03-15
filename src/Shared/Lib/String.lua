@@ -45,9 +45,10 @@ local function encode_string(header, field, value)
       return ''
    end
 
-   if len > STRING_MAX_SIZE then 
-      value = string.sub(value, 1, STRING_MAX_SIZE)
-      len   = STRING_MAX_SIZE
+   local maxLength = field.MaxLength
+   if len > maxLength then 
+      value = string.sub(value, 1, maxLength)
+      len   = maxLength
    end
 
    local out = {
@@ -129,6 +130,8 @@ local function encode_string_array(header, field, values)
       encode_byte(header, count)
    }
 
+   local maxLength = field.MaxLength
+
    for i = 1, count do
       local value = values[i]
 
@@ -137,9 +140,9 @@ local function encode_string_array(header, field, values)
       end
    
       local len = utf8.len(value)   
-      if len > STRING_MAX_SIZE then 
-         value = string.sub(value, 1, STRING_MAX_SIZE)
-         len   = STRING_MAX_SIZE
+      if len > maxLength then 
+         value = string.sub(value, 1, maxLength)
+         len   = maxLength
       end
    
       local byteExtra = 0

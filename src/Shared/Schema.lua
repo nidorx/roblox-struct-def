@@ -59,17 +59,23 @@ local encode_field_bool_array = Bool.encode_field_bool_array
 local decode_bool_array_byte  = Bool.decode_bool_array_byte
 
 local Int32 = require(game.ReplicatedStorage:WaitForChild('Lib'):WaitForChild('Int32'))
-local encode_field_int32            = Int32.encode_field_int32
+local encode_int32            = Int32.encode_int32
 local decode_int32_extra_byte       = Int32.decode_int32_extra_byte
 local decode_int32_bytes            = Int32.decode_int32_bytes
-local encode_field_int32_array      = Int32.encode_field_int32_array
+local encode_int32_array      = Int32.encode_int32_array
 local decode_int32_array_extra_byte = Int32.decode_int32_array_extra_byte
 
 local Int53 = require(game.ReplicatedStorage:WaitForChild('Lib'):WaitForChild('Int53'))
-local encode_field_int53         = Int53.encode_field_int53
-local decode_int53_extra_byte    = Int53.decode_int53_extra_byte
-local decode_int53_bytes         = Int53.decode_int53_bytes
-local encode_field_int53_array   = Int53.encode_field_int53_array
+local encode_int53            = Int53.encode_int53
+local decode_int53_extra_byte = Int53.decode_int53_extra_byte
+local decode_int53_bytes      = Int53.decode_int53_bytes
+local encode_int53_array      = Int53.encode_int53_array
+
+local Double = require(game.ReplicatedStorage:WaitForChild('Lib'):WaitForChild('Double'))
+local encode_double              = Double.encode_double
+local decode_double_extra_byte   = Double.decode_double_extra_byte
+local decode_double_bytes        = Double.decode_double_bytes
+local encode_double_array        = Double.encode_double_array
 
 local String = require(game.ReplicatedStorage:WaitForChild('Lib'):WaitForChild('String'))
 local STRING_MAX_SIZE                  = String.STRING_MAX_SIZE
@@ -77,6 +83,8 @@ local encode_string                    = String.encode_string
 local decode_string_extra_byte_first   = String.decode_string_extra_byte_first
 local decode_string_extra_byte_second  = String.decode_string_extra_byte_second
 local encode_string_array              = String.encode_string_array
+
+local Converters = require(game.ReplicatedStorage:WaitForChild('Lib'):WaitForChild('Converters'))
 
 -- todos os schemas registrados
 local SCHEMA_BY_ID = {}
@@ -97,7 +105,7 @@ local serialize
    @field   {Object} A referencia para o campo
    @value   {Object} O objeto que será serializado
 ]]
-local function encode_field_schema(header, field, value)
+local function encode_schema(header, field, value)
    if value == nil or field.Schema == nil then 
       return ''
    end
@@ -123,7 +131,7 @@ end
    @field   {Object} A referencia para o campo
    @value   {Object} O objeto que será serializado
 ]]
-local function encode_field_schema_array(header, field, values)
+local function encode_schema_array(header, field, values)
    local schema = field.Schema
    if values == nil or schema == nil or table.getn(values) == 0 then 
       return ''
@@ -149,7 +157,12 @@ local function set_object_value(objectCurrent, value, schema, fieldDecoded)
    if schema ~= nil then 
       local field = schema.FieldsById[fieldDecoded.Id]
       if field ~= nil then
-         if field.Type == fieldDecoded.Type and field.IsArray == fieldDecoded.IsArray then 
+         if field.Type == fieldDecoded.Type and field.IsArray == fieldDecoded.IsArray then
+            
+            if field.ConvertToInstance ~= nil then
+               value = field.ConvertToInstance(schema, field, value)
+            end
+
             objectCurrent[field.Name] = value
          else
             print(table.concat({
@@ -219,13 +232,13 @@ end
          Encoda o array de booleanos no [{VALUE}] (ver `encode_field_bool_array(header, fieldId, value)`)
 
       - int32
-         Formato <{EXTRA}[{VALUE}]?>, ver `encode_field_int32(header, fieldId, value)`
+         Formato <{EXTRA}[{VALUE}]?>, ver `encode_int32(header, fieldId, value)`
 
       - int32[]
-         Repete a estrutura <{EXTRA}[{VALUE}]> até que o LSB do EXTRA seja 0, ver `encode_field_int32_array(header, fieldId, value)`
+         Repete a estrutura <{EXTRA}[{VALUE}]> até que o LSB do EXTRA seja 0, ver `encode_int32_array(header, fieldId, value)`
 
       - int32
-         Formato <{EXTRA}[{VALUE}]?>, ver `encode_field_int53(header, fieldId, value)`
+         Formato <{EXTRA}[{VALUE}]?>, ver `encode_int53(header, fieldId, value)`
 
       - ref
          Possui a seguinte estrutura <{FIELD_REF}{SCHEMA_ID}[{VALUE}]{FIELD_REF_END}>, ver `encode_field_schema(header, field, value)`
@@ -248,7 +261,7 @@ end
 ]]
 serialize = function(data, schema, hasMore)
    if data == nil then 
-      print('WARNING: serialize - Recebeu nil como entrada, ignorando serialização (Name='..schema.Name..')')
+      print('[WARNING] Schema:Serialize - Recebeu nil como entrada, ignorando serialização (Name='..schema.Name..')')
       return ''
    end
 
@@ -263,10 +276,17 @@ serialize = function(data, schema, hasMore)
    for _, field in ipairs(schema.Fields) do
       value = data[field.Name]
       if value ~= nil then
-         -- <{FIELD}{EXTRA?}{VALUE?}...>
-         content = field.EncodeFn(header, field, value)
-         if content ~= '' then
-            out[#out + 1] = content
+         
+         if field.ConvertToSerialize ~= nil then 
+            value = field.ConvertToSerialize(schema, field, value)
+         end
+
+         if value ~= nil then 
+            -- <{FIELD}{EXTRA?}{VALUE?}...>
+            content = field.EncodeFn(header, field, value)
+            if content ~= '' then
+               out[#out + 1] = content
+            end
          end
       end
    end
@@ -306,10 +326,8 @@ local function deserialize(content, all)
    local inHeaderBit2      = false  -- o header identifica o shift de um byte, ver a função `encode_byte`
    local schemaId          = nil    -- O id do schema sendo processado, logo após o {HEADER}
    local schema            = nil    -- A referencia para o Schema sendo processado
-   local inString          = false  -- está processando uma string (UTF-8)
    local inExtraByte       = false  -- está processando o extra
-   local inValue           = false  -- está processando um valor (após descobir o field)
-   local extraByteDecoded  = false  -- dados do extra-field processado
+   local extraByteDecoded  = nil  -- dados do extra-field processado
    local isCaptureBytes    = false  -- está capturando bytes
    local captureCount      = 0      -- quantos itens seguintes é para guardar
    local capturedBytes     = {}     -- os bytes capturados
@@ -326,6 +344,9 @@ local function deserialize(content, all)
    for char in content:gmatch(utf8.charpattern) do
       i = i+1
 
+      ------------------------------------------------------------------------------------------------------------------
+      -- HEADER
+      ------------------------------------------------------------------------------------------------------------------
       if inHeader then
          if char == HEADER_END_MARK then 
             inHeader = false
@@ -368,22 +389,31 @@ local function deserialize(content, all)
                end
             end
          end
+
+      ------------------------------------------------------------------------------------------------------------------
+      -- SCHEMA_ID
+      ------------------------------------------------------------------------------------------------------------------
       elseif schemaId == nil then
          schemaId = decode_char(header, char)
          schema   = SCHEMA_BY_ID[schemaId]
 
          -- verifica se o schema está registrado
          if schema == nil and all ~= true then 
-            print('WARNING: Deserialize - O conteúdo faz referência para um schema não cadastrado (SCHEMA_ID='..schemaId..')')
+            print('[WARNING] Deserialize - O conteúdo faz referência para um schema não cadastrado (SCHEMA_ID='..schemaId..')')
             return nil
          end
 
+      ------------------------------------------------------------------------------------------------------------------
+      -- EXTRA_BYTE
+      ------------------------------------------------------------------------------------------------------------------
       elseif inExtraByte then
-         -- extra byte
 
          inExtraByte = false
          local extraByte = decode_char(header, char)
 
+         ---------------------------------------------------------------------------------------------------------------
+         -- int32 [EXTRA_BYTE]
+         ---------------------------------------------------------------------------------------------------------------
          if fieldDecoded.Type == FIELD_TYPE_BITMASK_INT32 then
 
             if fieldDecoded.IsArray then 
@@ -412,6 +442,9 @@ local function deserialize(content, all)
                end
             end 
 
+         ---------------------------------------------------------------------------------------------------------------
+         -- int53 [EXTRA_BYTE]
+         ---------------------------------------------------------------------------------------------------------------
          elseif fieldDecoded.Type == FIELD_TYPE_BITMASK_INT53 then
 
             extraByteDecoded = decode_int53_extra_byte(extraByte)
@@ -432,6 +465,36 @@ local function deserialize(content, all)
                end      
             end
 
+         ---------------------------------------------------------------------------------------------------------------
+         -- double [EXTRA_BYTE]
+         ---------------------------------------------------------------------------------------------------------------
+         elseif fieldDecoded.Type == FIELD_TYPE_BITMASK_DOUBLE then
+
+            extraByteDecoded = decode_double_extra_byte(extraByte)
+            -- Bytes
+            isCaptureBytes    = true
+            capturedBytes     = {}
+
+            if extraByteDecoded.IsBig then 
+               captureCount = extraByteDecoded.BytesTimes + extraByteDecoded.BytesRest
+            else
+               captureCount = extraByteDecoded.BytesRest
+            end
+
+            if extraByteDecoded.HasDec then
+               captureCount = captureCount + extraByteDecoded.BytesDec
+            end
+
+            if fieldDecoded.IsArray then
+               -- Bytes
+               if value == nil then 
+                  value = {}
+               end      
+            end
+
+         ---------------------------------------------------------------------------------------------------------------
+         -- string [EXTRA_BYTE]
+         ---------------------------------------------------------------------------------------------------------------
          elseif fieldDecoded.Type == FIELD_TYPE_BITMASK_STRING then
             if fieldDecoded.IsArray and fieldDecoded.Count == nil then
                -- O primeiro EXTRA é a quantidade de itens, ver `encode_string_array(header, field, values)`
@@ -466,6 +529,9 @@ local function deserialize(content, all)
             end
          end
 
+      ------------------------------------------------------------------------------------------------------------------
+      -- CAPTURING BYTES
+      ------------------------------------------------------------------------------------------------------------------
       elseif isCaptureBytes then
          capturedBytes[#capturedBytes + 1] = decode_char(header, char)
          captureCount = captureCount - 1
@@ -473,10 +539,16 @@ local function deserialize(content, all)
          if captureCount == 0 then 
             isCaptureBytes = false
 
+            ------------------------------------------------------------------------------------------------------------
+            -- int32 [bytes]
+            ------------------------------------------------------------------------------------------------------------
             if fieldDecoded.Type == FIELD_TYPE_BITMASK_INT32 then
 
                if fieldDecoded.IsArray then
-                  value[#value + 1] = decode_int32_bytes(capturedBytes, extraByteDecoded.Items[extraByteDecoded.Index].IsNegative)
+                  value[#value + 1] = decode_int32_bytes(
+                     capturedBytes, 
+                     extraByteDecoded.Items[extraByteDecoded.Index].IsNegative
+                  )
 
                   if extraByteDecoded.Items[extraByteDecoded.Index].HasMore then
                      extraByteDecoded.Index  = extraByteDecoded.Index + 1
@@ -501,6 +573,9 @@ local function deserialize(content, all)
                   extraByteDecoded = nil
                end
 
+            ------------------------------------------------------------------------------------------------------------
+            -- int53 [bytes]
+            ------------------------------------------------------------------------------------------------------------
             elseif fieldDecoded.Type == FIELD_TYPE_BITMASK_INT53 then
                if fieldDecoded.IsArray then
                   if extraByteDecoded.IsBig then 
@@ -536,16 +611,53 @@ local function deserialize(content, all)
                   value = nil
                   extraByteDecoded = nil
                end
+
+            ------------------------------------------------------------------------------------------------------------
+            -- double [bytes]
+            ------------------------------------------------------------------------------------------------------------
+            elseif fieldDecoded.Type == FIELD_TYPE_BITMASK_DOUBLE then
+               if fieldDecoded.IsArray then
+                  value[#value + 1] = decode_double_bytes(capturedBytes, extraByteDecoded) 
+                  if extraByteDecoded.HasMore then
+                     inExtraByte = true
+                  else
+                     set_object_value(object, value, schema, fieldDecoded)
+                     value = nil
+                     extraByteDecoded = nil
+                  end
+               else
+                  value = decode_double_bytes(capturedBytes, extraByteDecoded) 
+                  set_object_value(object, value, schema, fieldDecoded)
+                  value = nil
+                  extraByteDecoded = nil
+               end
+
+            elseif fieldDecoded.Type == FIELD_TYPE_BITMASK_BOOL_ARRAY then
+               local hasMore = decode_bool_array_byte(capturedBytes[1], value)
+               if hasMore then
+                  isCaptureBytes = true
+                  capturedBytes  = {}
+                  captureCount   = 1
+               else 
+                  -- bool array não possui mais dados
+                  set_object_value(object, value, schema, fieldDecoded)
+                  value             = nil
+                  fieldDecoded      = nil
+                  extraByteDecoded  = nil
+               end
             end
          end
 
+      ------------------------------------------------------------------------------------------------------------------
+      -- CAPTURING CHARS (string only)
+      ------------------------------------------------------------------------------------------------------------------
       elseif isCaptureChars then
          capturedChars[#capturedChars + 1] = char
          captureCount = captureCount - 1
          if captureCount == 0 then 
             isCaptureChars = false
 
-            if fieldDecoded.Type == FIELD_TYPE_BITMASK_STRING then 
+            if fieldDecoded.Type == FIELD_TYPE_BITMASK_STRING then
                if fieldDecoded.IsArray then 
                   value[#value + 1] = table.concat(capturedChars, '')
 
@@ -567,26 +679,10 @@ local function deserialize(content, all)
             end
          end
 
-      -- @TODO: Remover esse fluxo
-      elseif inValue then 
-         if inString then
-
-         elseif fieldDecoded.Type == FIELD_TYPE_BITMASK_BOOL_ARRAY then
-            if not decode_bool_array_byte(decode_char(header, char), value) then               
-               inValue  = false -- bool array não possui mais dados
-            end
-         end
-         
-         -- se o schema não existir, ignora parse dos dados
-         if not inValue and schema ~= nil then 
-            -- @TODO: Após o processamento do dado bruto, invoca o decode do campo
-
-            set_object_value(object, value, schema, fieldDecoded)
-            value             = nil
-            fieldDecoded      = nil
-            extraByteDecoded  = nil
-         end
-      else 
+      ------------------------------------------------------------------------------------------------------------------
+      -- FIELD or SCHEMA END
+      ------------------------------------------------------------------------------------------------------------------
+      else
          -- in field
          fieldDecoded = decode_field_byte(decode_char(header, char))
          inExtraByte = true
@@ -601,12 +697,13 @@ local function deserialize(content, all)
             
 
          elseif fieldDecoded.Type == FIELD_TYPE_BITMASK_BOOL_ARRAY then
-            value       = {}
-            inValue     = true   
+            value          = {}
+            isCaptureBytes = true
+            capturedBytes  = {}
+            captureCount   = 1
             inExtraByte = false  -- não possui extra byte
 
          elseif fieldDecoded.Type == FIELD_TYPE_BITMASK_SCHEMA then
-
             inExtraByte = false  -- não possui extra byte
 
             if fieldDecoded.IsArray then 
@@ -623,9 +720,7 @@ local function deserialize(content, all)
             entry.inHeaderBit2      = inHeaderBit2
             entry.schemaId          = schemaId
             entry.schema            = schema
-            entry.inString          = inString
             entry.inExtraByte       = inExtraByte
-            entry.inValue           = inValue
             entry.extraByteDecoded  = extraByteDecoded
             entry.isCaptureBytes    = isCaptureBytes
             entry.captureCount = captureCount
@@ -645,10 +740,8 @@ local function deserialize(content, all)
             inHeaderBit2      = false
             schemaId          = nil
             schema            = nil
-            inString          = false
             inExtraByte       = false
-            inValue           = false
-            extraByteDecoded  = false
+            extraByteDecoded  = nil
             isCaptureBytes    = false
             captureCount = 0
             capturedBytes     = {}
@@ -660,17 +753,27 @@ local function deserialize(content, all)
             capturedChars     = {}
 
          elseif fieldDecoded.Type == FIELD_TYPE_BITMASK_SCHEMA_END then
-
             inExtraByte = false  -- não possui extra byte
+
+            -- default values
+            if schema ~= nil then
+               -- força valores padrão de cada campo do esquema
+               for _, field in ipairs(schema.Fields) do
+                  local name = field.Name
+                  if object[name] == nil then
+                     object[name] = field.Default
+                  end
+               end
+            end
 
             local parent = stack[#stack]
 
-            if parent ~= nil then 
+            if parent ~= nil then
                if parent.fieldDecoded.IsArray then
                   table.insert(parent.value, object)
    
                   local hasMore = fieldDecoded.IsArray
-                  if hasMore then 
+                  if hasMore then
                      -- faz o reset das variáveis
                      header            = { shift = {}, index = 1}
                      fieldDecoded      = nil
@@ -678,10 +781,8 @@ local function deserialize(content, all)
                      inHeaderBit2      = false
                      schemaId          = nil
                      schema            = nil
-                     inString          = false
                      inExtraByte       = false
-                     inValue           = false
-                     extraByteDecoded  = false
+                     extraByteDecoded  = nil
                      isCaptureBytes    = false
                      captureCount      = 0
                      capturedBytes     = {}
@@ -699,9 +800,7 @@ local function deserialize(content, all)
                      inHeaderBit2      = parent.inHeaderBit2
                      schemaId          = parent.schemaId
                      schema            = parent.schema
-                     inString          = parent.inString
                      inExtraByte       = parent.inExtraByte
-                     inValue           = parent.inValue
                      extraByteDecoded  = parent.extraByteDecoded
                      isCaptureBytes    = parent.isCaptureBytes
                      captureCount      = parent.captureCount
@@ -728,9 +827,7 @@ local function deserialize(content, all)
                   inHeaderBit2      = parent.inHeaderBit2
                   schemaId          = parent.schemaId
                   schema            = parent.schema
-                  inString          = parent.inString
                   inExtraByte       = parent.inExtraByte
-                  inValue           = parent.inValue
                   extraByteDecoded  = parent.extraByteDecoded
                   isCaptureBytes    = parent.isCaptureBytes
                   captureCount      = parent.captureCount
@@ -753,10 +850,106 @@ end
 local Schema = {}
 Schema.__index = Schema
 
+local function parse_primitive_field(fieldType, field, param1, defaultValue)
+
+   if fieldType == 'int32' then 
+      field.EncodeFn = encode_int32
+      field.Type     = FIELD_TYPE_BITMASK_INT32
+      if defaultValue == nil then 
+         defaultValue  = 0
+      end
+      
+   elseif fieldType == 'int32[]' then 
+      field.IsArray  = true
+      field.EncodeFn = encode_int32_array
+      field.Type     = FIELD_TYPE_BITMASK_INT32
+      if defaultValue == nil then 
+         defaultValue  = {}
+      end
+      
+   elseif fieldType == 'int53' then 
+      field.EncodeFn = encode_int53
+      field.Type     = FIELD_TYPE_BITMASK_INT53
+      if defaultValue == nil then 
+         defaultValue  = 0
+      end
+
+   elseif fieldType == 'int53[]' then 
+      field.IsArray  = true
+      field.EncodeFn = encode_int53_array
+      field.Type     = FIELD_TYPE_BITMASK_INT53
+      if defaultValue == nil then 
+         defaultValue  = {}
+      end
+      
+   elseif fieldType == 'double' then 
+      field.EncodeFn = encode_double
+      field.Type     = FIELD_TYPE_BITMASK_DOUBLE
+      if defaultValue == nil then 
+         defaultValue  = 0.0
+      end
+   
+   elseif fieldType == 'double[]' then 
+      field.IsArray  = true
+      field.EncodeFn = encode_double_array
+      field.Type     = FIELD_TYPE_BITMASK_DOUBLE
+      if defaultValue == nil then 
+         defaultValue  = {}
+      end
+
+   elseif fieldType == 'bool' then
+      field.EncodeFn = encode_field_bool
+      field.Type     = FIELD_TYPE_BITMASK_BOOL
+      if defaultValue == nil then 
+         defaultValue  = false
+      end
+
+   elseif fieldType == 'bool[]' then
+      field.IsArray  = true
+      field.EncodeFn = encode_field_bool_array
+      field.Type     = FIELD_TYPE_BITMASK_BOOL_ARRAY
+      if defaultValue == nil then 
+         defaultValue  = {}
+      end
+      
+   elseif fieldType == 'string' or fieldType == 'string[]' then
+
+      field.Type        = FIELD_TYPE_BITMASK_STRING
+      field.MaxLength   = STRING_MAX_SIZE
+
+      local maxLength = param1
+      if maxLength ~= nil and type(maxLength) == 'number' then
+         field.MaxLength = math.floor(maxLength)
+         if field.MaxLength <= 0 then
+            field.MaxLength = STRING_MAX_SIZE
+         end 
+         field.MaxLength = math.min(field.MaxLength, STRING_MAX_SIZE)
+      end
+
+      if fieldType == 'string' then 
+         field.EncodeFn = encode_string
+         if defaultValue == nil then 
+            defaultValue  = ''
+         end
+      else
+         field.EncodeFn = encode_string_array
+         if defaultValue == nil then 
+            defaultValue  = {}
+         end
+      end
+   else
+      return false
+   end
+
+   field.Default = defaultValue
+
+   return true
+end
+
 --[[
    Permite adicionar um campo no Schema
 ]]
-function Schema:Field(id, name, fieldType, isArray, maxLength)
+function Schema:Field(id, name, fieldType, param1, defaultValue, convertToSerialize, convertToInstance)
    
    if id == nil or type(id) ~= 'number' or math.floor(id) ~= id or id < 0 or id > 16 then
       error('O Id do campo deve ser um número inteiro entre 0 e 16')
@@ -783,72 +976,52 @@ function Schema:Field(id, name, fieldType, isArray, maxLength)
    local field = {}
    field.Id       = id
    field.Name     = name
-   field.IsArray  = isArray == true
+   field.IsArray  = false
 
-   if fieldType == 'int32' then 
-      field.Type = FIELD_TYPE_BITMASK_INT32
-      if field.IsArray then 
-         field.EncodeFn = encode_field_int32_array
-      else
-         field.EncodeFn = encode_field_int32
-      end
-      
-   elseif fieldType == 'int53' then 
-      field.Type = FIELD_TYPE_BITMASK_INT53
-      if field.IsArray then 
-         field.EncodeFn = encode_field_int53_array
-      else
-         field.EncodeFn = encode_field_int53
-      end
-
-   elseif fieldType == 'double' then 
-      field.Type = FIELD_TYPE_BITMASK_DOUBLE
-
-   elseif fieldType == 'bool' then
-      
-      if field.IsArray then 
-         field.Type     = FIELD_TYPE_BITMASK_BOOL_ARRAY
-         field.EncodeFn = encode_field_bool_array
-         
-      else
-         field.Type = FIELD_TYPE_BITMASK_BOOL
-         field.EncodeFn = encode_field_bool
-         
-      end
-      
-   elseif fieldType == 'string' then 
-      field.Type        = FIELD_TYPE_BITMASK_STRING
-      field.MaxLength   = STRING_MAX_SIZE
-
-      if maxLength ~=nil and type(maxLength) == 'number' then
-         field.MaxLength = math.floor(maxLength)
-         if field.MaxLength <= 0 then
-            field.MaxLength = STRING_MAX_SIZE
-         end 
-         field.MaxLength = math.min(field.MaxLength, STRING_MAX_SIZE)
-      end
-
-      if field.IsArray then  
-         field.EncodeFn = encode_string_array
-      else
-         field.EncodeFn = encode_string
-      end
-      
-   elseif fieldType.isSchema then 
+   if parse_primitive_field(fieldType, field, param1) then
+      -- is primitive - OK
+   elseif fieldType.isSchema then
       -- schema ref
       field.Type     = FIELD_TYPE_BITMASK_SCHEMA
       field.Schema   = fieldType
+
+      local isArray = param1
       
-      if field.IsArray then  
-         field.EncodeFn = encode_field_schema_array
+      if isArray then
+         field.IsArray  = true
+         field.EncodeFn = encode_schema_array
       else
-         field.EncodeFn = encode_field_schema
+         field.EncodeFn = encode_schema
       end
 
-   else 
-      -- @TODO: Verificar se é referencia para Vector3 ou outros fields padrões
+   else
+      -- Verifica se é referencia para Vector3 ou outras classes padrões do Roblox
+      local converter = Converters[fieldType]
+      if converter == nil then
+         error('O Tipoo de dado do campo é inválido')
+      end
       
+      local isArray = param1
+      if isArray then 
+         parse_primitive_field(converter[2][1], field, param1)
+         field.Default              = converter[2][2]
+         field.ConvertToSerialize   = converter[2][3]
+         field.ConvertToInstance    = converter[2][4]
+      else 
+         parse_primitive_field(converter[1][1], field, param1)
+         field.Default              = converter[1][2]
+         field.ConvertToSerialize   = converter[1][3]
+         field.ConvertToInstance    = converter[1][4]
+      end
    end 
+   
+   if field.ConvertToSerialize == nil and type(convertToSerialize) == 'function' then
+      field.ConvertToSerialize = convertToSerialize
+   end
+
+   if field.ConvertToInstance == nil and type(convertToInstance) == 'function' then 
+      field.ConvertToInstance = convertToInstance
+   end
 
    table.insert(self.Fields, field)
    self.FieldsById[field.Id] = field

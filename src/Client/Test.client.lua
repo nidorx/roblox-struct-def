@@ -12,36 +12,22 @@ local HttpService = game:GetService("HttpService")
 local Schema = require(game.ReplicatedStorage:WaitForChild('Schema'))
 
 
-local schema = Schema.Create(1)
-   :Field(1,   'BoolTrue',         'bool', false)
-   :Field(2,   'BoolFalse',        'bool', false)
-   :Field(3,   'BoolArray2',       'bool',  true)
-   :Field(4,   'BoolArray4',       'bool',  true)
-   :Field(5,   'BoolArray7',       'bool',  true)
-   :Field(6,   'Int33',            'int32', false)
-   :Field(7,   'Int60Neg',         'int32', false)
-   :Field(8,   'Int32Byte1',       'int32', false)
-   :Field(9,   'Int32Byte2',       'int32', false)
-   :Field(10,  'Int32Byte3',       'int32', false)
-   :Field(11,  'Int32Byte4',       'int32', false)
-   :Field(12,  'Int32Array',       'int32', true)
-
-
-local schemaParent = Schema.Create(2)
-   :Field(1,   'Child',             schema, false)
-   :Field(2,   'ChildArray',        schema, true)
-   :Field(3,   'Int53Byte0',       'int53', false)
-   :Field(4,   'Int53Byte1',       'int53', false)
-   :Field(5,   'Int53Byte2',       'int53', false)
-   :Field(6,   'Int53Byte3',       'int53', false)
-   :Field(7,   'Int53Byte4',       'int53', false)
-   :Field(8,   'Int53Byte5',       'int53', false)
-   :Field(9,   'Int53Byte6',       'int53', false)
-   :Field(10,  'Int53Array',       'int53', true)
-   :Field(11,  'StringAscii',      'string', false)
-   :Field(12,  'StringUtf8',       'string', false)
-   :Field(13,  'StringBig',        'string', false)
-   :Field(14,  'StringArray',      'string', true)
+local schemaChild = Schema.Create(1)
+   :Field(1,   'BoolTrue',          'bool')
+   :Field(2,   'BoolFalse',         'bool')
+   :Field(3,   'BoolArray2',        'bool[]')
+   :Field(4,   'BoolArray4',        'bool[]')
+   :Field(5,   'BoolArray7',        'bool[]')
+   :Field(6,   'Int33',             'int32')
+   :Field(7,   'Int60Neg',          'int32')
+   :Field(8,   'Int32Byte1',        'int32')
+   :Field(9,   'Int32Byte2',        'int32')
+   :Field(10,  'Int32Byte3',        'int32')
+   :Field(11,  'Int32Byte4',        'int32')
+   :Field(12,  'Int32Array',        'int32[]')
+   :Field(13,  'Double',            'double')
+   :Field(14,  'DoubleBig',         'double')
+   :Field(15,  'DoubleArray',       'double[]')
 
 
 local childContent = {
@@ -60,25 +46,60 @@ local childContent = {
 }
 
 local childContent2 = {
-   BoolTrue = true, 
-   BoolFalse = false,
-   BoolArray2 = { true, false},
-   BoolArray4 = { true, false, true, false},
-   BoolArray7 = { true, false, true, false, true, false, true },
-   
+   BoolTrue    = true, 
+   BoolFalse   = false,
+   BoolArray2  = { true, false},
+   BoolArray4  = { true, false, true, false},
+   BoolArray7  = { true, false, true, false, true, false, true },
+   Double      = 5.666,
+   DoubleBig   = 281474976710655.345623,
+   DoubleArray = {
+      5.666, 32896.8421504, 2155905152.32896, 281474976710655.345623,
+      -5.666, -32896.8421504, -2155905152.32896, -281474976710655.345623
+   }
 }
 
+local schemaObjects = Schema.Create(3)
+   :Field(0,   'Vector3',          Vector3)
+   :Field(1,   'Vector3Array',     Vector3, true)
+
+local objectContent = {
+   Vector3        = Vector3.new(1.111, 2.222, 3.333),
+   Vector3Array   = {
+      Vector3.new(1.111, 2.222, 3.333),
+      Vector3.new(-1.111, -2.222, -3.333)
+   }
+}
+
+local schemaParent = Schema.Create(2)
+   :Field(0,   'Object',            schemaObjects)
+   :Field(1,   'Child',             schemaChild)
+   :Field(2,   'ChildArray',        schemaChild, true)
+   :Field(3,   'Int53Byte0',       'int53')
+   :Field(4,   'Int53Byte1',       'int53')
+   :Field(5,   'Int53Byte2',       'int53')
+   :Field(6,   'Int53Byte3',       'int53')
+   :Field(7,   'Int53Byte4',       'int53')
+   :Field(8,   'Int53Byte5',       'int53')
+   :Field(9,   'Int53Byte6',       'int53')
+   :Field(10,  'Int53Array',       'int53[]')
+   :Field(11,  'StringAscii',      'string')
+   :Field(12,  'StringUtf8',       'string')
+   :Field(13,  'StringBig',        'string')
+   :Field(14,  'StringArray',      'string[]')
+
 local parentContent = {
-   Child = childContent,
-   ChildArray = { childContent, childContent2 },
-   Int53Byte0 = 60,
-   Int53Byte1 = 255,
-   Int53Byte2 = 65535,
-   Int53Byte3 = 16777215,
-   Int53Byte4 = 4294967295,
-   Int53Byte5 = 1099511627775,
-   Int53Byte6 = 281474976710655,
-   Int53Array = {
+   Object      = objectContent,
+   Child       = childContent,
+   ChildArray  = { childContent, childContent2 },
+   Int53Byte0  = 60,
+   Int53Byte1  = 255,
+   Int53Byte2  = 65535,
+   Int53Byte3  = 16777215,
+   Int53Byte4  = 4294967295,
+   Int53Byte5  = 1099511627775,
+   Int53Byte6  = 281474976710655,
+   Int53Array  = {
       60, 255, 65535, 16777215, 4294967295, 1099511627775, 281474976710655,
       -60, -255, -65535, -16777215, -4294967295, -1099511627775, -281474976710655
    },
@@ -101,9 +122,8 @@ local deserialized = Schema.Deserialize(serialized)
 print('deserialized', deserialized)
 
 
-local json = HttpService:JSONEncode(parentContent)
-print('json', json, utf8.len(json))
-
+-- local json = HttpService:JSONEncode(parentContent)
+-- print('json', json, utf8.len(json))
 
 --[[
 @TODO
@@ -113,15 +133,16 @@ print('json', json, utf8.len(json))
    [x] int32[]
    [x] int53
    [x] int53[]
-   [ ] double
-   [ ] double[]
+   [x] double
+   [x] double[]
    [x] string
    [x] string[]
    [x] ref
    [x] ref[]
    -- roblox DataTypes - https://developer.roblox.com/en-us/api-reference/data-types
-   [ ] Vector2
    [ ] Vector3
+   [ ] Vector3Value
+   [ ] Vector2
    [ ] CFrame
    [ ] Color3
    [ ] BrickColor
@@ -131,7 +152,6 @@ print('json', json, utf8.len(json))
    [ ] Enum, EnumItem, Enums
    [ ] BoolValue
    [ ] CFrameValue
-   [ ] Vector3Value
    [ ] Color3Value
    [ ] BrickColorValue
    [ ] IntValue
