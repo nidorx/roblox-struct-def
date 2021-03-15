@@ -1,0 +1,24 @@
+{
+	"name": "schema",
+	"tree": {
+      "$className": "DataModel",
+      "ReplicatedStorage": {
+         "$className": "ReplicatedStorage",
+         "$ignoreUnknownInstances": true,
+         "$path": "src/Shared"
+      },
+      "ServerScriptService": {
+         "$className": "ServerScriptService",
+         "$ignoreUnknownInstances": true,
+         "$path": "src/Server"
+      },
+      "StarterPlayer": {
+         "$className": "StarterPlayer",
+         "StarterPlayerScripts": {
+            "$className": "StarterPlayerScripts",
+            "$ignoreUnknownInstances": true,
+            "$path": "src/Client"
+         }
+      }
+	}
+}

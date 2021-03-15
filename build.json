@@ -1,0 +1,11 @@
+{
+   "minify": true,
+   "maxSize": 153600,
+   "compressStrings": true,
+   "compressFields": true,
+   "entries": [
+      "src/Shared/Schema.lua"
+   ],
+   "dontIgnoreVarDir": [
+   ]
+}

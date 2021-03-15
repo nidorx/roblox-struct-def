@@ -1,0 +1,11 @@
+# IDE
+.idea
+.vscode
+
+# Roblox Studio
+# place-dev.rbxl
+# **/*.rbxl.lock
+
+# misc
+build
+node_modules
