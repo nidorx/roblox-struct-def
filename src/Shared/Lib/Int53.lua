@@ -59,7 +59,6 @@ local function encode_int53_out(header, out, value, hasMore)
       byteExtra = bor(byteExtra, INT_EXTRA_BITMASK_NEGATIVE)
    end
    
-   -- print('value', value, hasMore)
    if hasMore then 
       byteExtra = bor(byteExtra, INT53_EXTRA_BITMASK_HAS_MORE)
    end
@@ -124,9 +123,6 @@ local function encode_int53_out(header, out, value, hasMore)
       local rest = value - (times+1)*INT32_MAX
 
       local bytes = {}
-
-
-      print('times', times, 'rest', rest)
 
       -- numero de bytes usados pelo multiplicador (até 2)
       if times <= INT8_MAX then

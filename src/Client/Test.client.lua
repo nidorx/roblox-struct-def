@@ -38,6 +38,10 @@ local schemaParent = Schema.Create(2)
    :Field(8,   'Int53Byte5',       'int53', false)
    :Field(9,   'Int53Byte6',       'int53', false)
    :Field(10,  'Int53Array',       'int53', true)
+   :Field(11,  'StringAscii',      'string', false)
+   :Field(12,  'StringUtf8',       'string', false)
+   :Field(13,  'StringBig',        'string', false)
+   :Field(14,  'StringArray',      'string', true)
 
 
 local childContent = {
@@ -64,7 +68,7 @@ local childContent2 = {
    
 }
 
-local content = {
+local parentContent = {
    Child = childContent,
    ChildArray = { childContent, childContent2 },
    Int53Byte0 = 60,
@@ -77,17 +81,27 @@ local content = {
    Int53Array = {
       60, 255, 65535, 16777215, 4294967295, 1099511627775, 281474976710655,
       -60, -255, -65535, -16777215, -4294967295, -1099511627775, -281474976710655
+   },
+   StringAscii = "!#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[]^_`abcdefghijklmnopqrstuvwxyz{|}~",
+   StringUtf8  = 'Foo © bar 𝌆 baz ☃ qux',
+   StringBig   = [[!#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[]^_`abcdefghijklmnopqrstuvwxyz{|}~Foo © bar 𝌆 baz ☃ qux!#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[]^_`abcdefghijklmnopqrstuvwxyz{|}~Foo © bar 𝌆 baz ☃ qux!#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[]^_`abcdefghijklmnopqrstuvwxyz{|}~Foo © bar 𝌆 baz ☃ qux!#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[]^_`abcdefghijklmnopqrstuvwxyz{|}~Foo © bar 𝌆 baz ☃ qux]],
+   StringArray = {
+      'Foo',
+      '© bar ',
+      '𝌆 baz ☃',
+      'qux',
+      'jose',
    }
 }
 
-local serialized = schemaParent:Serialize(content)
+local serialized = schemaParent:Serialize(parentContent)
 
 print('serialized', serialized, utf8.len(serialized))
 local deserialized = Schema.Deserialize(serialized)
 print('deserialized', deserialized)
 
 
-local json = HttpService:JSONEncode(content)
+local json = HttpService:JSONEncode(parentContent)
 print('json', json, utf8.len(json))
 
 
@@ -101,8 +115,8 @@ print('json', json, utf8.len(json))
    [x] int53[]
    [ ] double
    [ ] double[]
-   [ ] string
-   [ ] string[]
+   [x] string
+   [x] string[]
    [x] ref
    [x] ref[]
    -- roblox DataTypes - https://developer.roblox.com/en-us/api-reference/data-types
