@@ -1,255 +1,382 @@
-## Roblox Schema
+# Roblox Structure Definition - StructDef
 
-Um Schema permite definir a estrutura de dados que deseja ser serializado. Os campos de um esquema pode ser de um dos tipos abaixo
-    - int32     {-(2^32) a (2^32)-1}
-    - int53     {-(2^53) a (2^53)}
-    - double    {int53.{0 a 65535}}
-    - boolean
-    - string
-    - SchemaRef
+**TLDR;** 
 
-  Uma mensagem encodada tem a seguinte estrutura
-    {HEADER}{SCHEMA_ID}<{FIELD}{EXTRA?}{VALUE?}...>
-  
-  Onde:
-    SCHEMA_ID {8 bits} é o id do esquema da mensagem, o sistema permite a criação de até 255 esquemas distintos
-    FIELD     {8 bits} é a definição da chave do campo do esquema
-    EXTRA     {8 bits} Definições adicionais à respeito do conteúdo, nem sempre está presente, depende da informação contida na FIELD
-    VALUE     {variable} É o próprio conteúdo
+```lua
+local StructDef = require(game.ReplicatedStorage:WaitForChild("StructDef"))
 
-    FIELD
-      Quando uma mensagem é codificada, as chaves e os valores são concatenados. Quando a mensagem está sendo decodificada, o analisador precisa ser capaz de pular os campos que não reconhece. Desta forma, novos campos podem ser adicionados a uma mensagem sem quebrar programas antigos que não os conhecem. Para esse fim, a "chave" para cada par em uma mensagem em formato de ligação é, na verdade, dois valores - o identificador do campo no schema, mais um tipo de ligação que fornece informações suficientes para encontrar o comprimento do valor a seguir.
+local MySchema = StructDef.Schema(1)
+   :Field(0, 'Points',    'int32')
+   :Field(1, 'WeaponIds', 'int32[]')
 
-      1 1 1 1 1 1 1 1
-      |   | | |     |
-      |   | | +-----+--- 4 bits para identificar o campo, portanto, um schema pode ter no máximo 16 campos (2^4)
-      |   | |            
-      |   | +----------- 1 bit  IS ARRAY flag que determina se é array
-      +---+------------- 3 bits determina o tipo do dado
+local data = {
+  Points    = 35625737,
+  WeaponIds = {13883, 33655, 6533, 75567}
+} 
 
-      
-      DATA TYPE 
-        |  code |    type    |
-        | ----- | ---------- | 
-        | 0 0 0 | bool FALSE |
-        | 0 0 1 | bool TRUE  |
-        | 0 1 0 | int32      |   
-        | 0 1 1 | int53      |
-        | 1 0 0 | double     |
-        | 1 0 1 | string     |
-        | 1 1 0 | SchemaRef  |
-        | 1 1 1 | NÃO USADO  |
+local serialized = MySchema:Serialize(data)
 
-    EXTRA
+-- prints "A@ha`=#c.$Ab+txX^I={;K#IQJ"
+print(serialized) 
 
-      - boolean 
-          - Não se aplica
+local deserialized = StructDef.Deserialize(serialized)
+print(deserialized)
+```
 
-      - Bool array
-        1 1 1 1 1 1 1 1
-        | | |     | | |
-        | | |     | | +--- 1 bit TEM MAIS? Caso positivo, o proximo byte também  faz parte do array, mesma estrutura
-        | | |     | | 
-        | | |     | +----- descartado
-        | | |     | 
-        | | +-----+------- 4 bits que podem fazer parte do array
-        | |
-        +-+--------------- 2 bit (= 4 valores) determina quantos bits seguintes fazem parte do array
+## Links
 
-      - int32 ARRAY
-        1 1 1 1 1 1 1 1
-        | | | | | | | |
-        | | | | | | | +--- 1 bit TEM MAIS? Caso positivo, o proximo byte também  faz parte do array, mesma estrutura
-        | | | | | | | 
-        | | | | | | +----- descartado
-        | | | | | |
-        | | | | +-+------- 2 bits (= 4 valores) quantos bytes [chars] é usado pelo 3º int32 na sequencia, caso 0 STOP
-        | | | |
-        | | +-+----------- 2 bits (= 4 valores) quantos bytes [chars] é usado pelo 2º int32 na sequencia, caso 0 STOP
-        | |
-        +-+--------------- 2 bits (= 4 valores) quantos bytes [chars] é usado pelo 1º int32 na sequencia
+- **Latest stable version**
+    - https://www.roblox.com/library/ID_LIBRARY/StructDef
+- **Forum**
+    - https://devforum.roblox.com/t/ID_FORUM
+- **Releases**
+   - https://github.com/nidorx/roblox-struct-def/releases
+    
+## Installation
 
-      - int32
-        0 1 1 1 1 1 1 1
-        | | | |       |
-        | | | |       |
-        | | | +-------+--- 5 bits descartado caso numero maior que 128
-        | | |
-        | +-+------------- 2 bits (= 4 valores) quantos bytes [chars] é usado pelo int32 na sequencia
-        |
-        +----------------- 1 bit número cabe nos proximos bits? Se número for <= 128 (2^7),
-                            o seu conteúdo já é formado pelos proximos bit. Caso negativo, valida proximos 2 bits
+You can do the installation directly from Roblox Studio, through the Toolbox search for `StructDef`, this is the minified version of the engine (https://www.roblox.com/library/ID_LIBRARY/StructDef).
 
-                            A = valor normal (0 a 92)
-                            B = slide 1 (95 a 184)
-                            C = slide 2 (189 a 255)
-                            0 0 0 0 0   = A A A A
-                            0 0 0 0 0   = A A A B
-                            0 0 0 0 0   = A A A C
-                            0 0 0 0 0   = A A B A
-                            0 0 0 0 0   = A A C A
-                            0 0 0 0 0   = A B A A
-                            0 0 0 0 0   = A C A A
-                            0 0 0 0 0   = B A A A
-                            0 0 0 0 0   = C A A A
-                            1 1 1 1 1
+If you want to work with the original source code (for debugging or working on improvements), access the repository at https://github.com/nidorx/roblox-struct-def
+
+## What is StructDef
+
+The Structure Definition, or simply StructDef, is a library that allows the serialization and deserialization of structured data. You define how you want your data to be structured once and then you can use the generated instance to easily write and read your structured data to and from a UTF-8 string.
+
+## Use cases
+
+StructDef was developed with the aim of simplifying the serialization and deserialization of complex objects using a standard language. In addition to being simple, StructDef generates an optimized output to be used in services such as [Data Stores](https://developer.roblox.com/en-us/articles/Data-store) and [MessagingService](https://developer.roblox.com/en-us/api-reference/class/MessagingService) of Roblox, which has limitations related to the size of the message sent.
+
+StructDef can be used to:
+
+- Generate less boilerplate code
+  - A suitable StructDef scheme helps to reduce the boilerplate code and thereby improve performance in the long term.
+- Reduce network traffic
+  - Data serialized with StructDef is very small. StructDef only saves in the output string the information necessary for its future deserialization
+- Package the messages that will be sent via MessagingService 
+  - StructDef allows multiple serialized data to be concatenated in sequence, and all of them can be deserialized at once by passing `true` as the second parameter of the `StructDef.Deserialize(content, all)` method, so it is possible to take advantage of the entire band available (1KB) for transporting diverse messages efficiently
+- Persist data in Data Stores
+  - By generating a smaller output, data serialized by StructDef is saved and read faster from Data Stores, if compared to a serialization using JSON for example
 
 
+StructDef may not be recommended for large data structures that need to be serialized at all times (for each frame, for example), because StructDef does strong validation of the input data and makes heavy use of [bit manipulation](https://developer.roblox.com/en-us/api-reference/lua-docs/bit32) in order to guarantee serializing numbers with varying size of bytes. The recommendation is that you do tests in order to find out if StructDef will penalize its functionality.
 
+**For less complex data structures the impact of StructDef is negligible**
 
-    A B   A C
-    0 1 0 0 1 1
+## Defining A Schema
 
-32768
-65535
+Defining a Schema in StructDef is very simple. Just create the Schema and add the fields according to their structure.
 
-String.fromCharCode(Number.parseInt('1000000000000000', 2))
+```lua
+local PlayerSchema = StructDef.Schema(1)
+   :Field(0,   'Name',         'string', { MaxLength = 100 })
+   :Field(1,   'TimeInGame',   'int53')
+   :Field(2,   'Experience',   'int53')
+   :Field(3,   'Money',        'int53')
+```
 
-  -- 
-  0 1 0 0 0 0 0 0  - 64 - @
-  0 1 0 1 1 1 1 1  - 95 - _
+Optionally, you can define the schema declaratively, the result is the same.
 
+```lua
+local PlayerSchema = StructDef.Schema({
+  Id      = 1,
+  Fields  = {
+    Name        = { Id = 0, Type = 'string', MaxLength = 100 },
+    TimeInGame  = { Id = 1, Type = 'int53' },
+    Experience  = { Id = 2, Type = 'int53' },
+    Money       = { Id = 3, Type = 'int53' }
+  },
+})
+```
 
-  local dictionary94 = {} 
+### Fields
 
+The general definition of a Schema's fields is
 
+```lua
+:Field(ID, NAME, TYPE, OPTIONS?)
 
+-- or --
 
-  {HEADER}.<{KEY}{VALUE}...>
-
-
-
-  local HEADER_SWAP = {
-    {
-      -- 01011100 = \
-      string.char(92), 
-      -- 00011100 = <
-      string.char(60)
-    },
-    {
-      -- 11111111 = DELETE
-      string.char(92), 
-      -- 00111111 = ?
-      string.char(60)
+Fields = {
+  {
+    NAME = { 
+      Id          = ID,
+      Type        = TYPE,
+      Default     = VALUE,
+      MaxLength   = NUMBER,
+      ToSerialize = function,
+      ToInstance  = function
     }
   }
+}
+```
 
- "0111110 - 62 - >",
-
-  
-
-    1_1_0 1_0_1
-
-
-
-      - int53 ARRAY
-        1 1 1 1 1 1 1 1 
-        | | |       | |
-        | | |       | +- 1 bit TEM MAIS? Caso positivo, o byte após o 2º int53 faz parte do array, mesma estrutura
-        | | |       | 
-        | | |       |
-        | | |       |
-        | | |       |
-        | | |       |
-        | | +-------+---- 5 bits quantos bytes [chars] é usado pelo 1º e 2º int53 na sequencia, conforme tabela abaixo
-        | +-------------- 1 bit quantos int53 na sequencia (0 = 1, 1 = 2)
-        +---------------- 1 bit IS ARRAY = true
-
-          Tabela de distribuição de bytes para array
-
-          (1 e 1) = 0 0 0 0 0
-          (2 e 1) = 0 0 0 0 1
-          (3 e 1) = 0 0 0 1 0
-          (4 e 1) = 0 0 0 1 1
-          (5 e 1) = 0 0 1 0 0
-          (6 e 1) = 0 0 1 0 1
-          (7 e 1) = 0 0 1 1 0
-          (1 e 2) = 0 0 1 1 1
-          (1 e 3) = 0 1 0 0 0
-          (1 e 4) = 0 1 0 0 1
-          (1 e 5) = 0 1 0 1 0
-          (1 e 6) = 0 1 0 1 1
-          (1 e 7) = 0 1 1 0 0
-          (2 e 2) = 0 1 1 0 1
-          (3 e 3) = 0 1 1 1 0
-          (4 e 4) = 0 1 1 1 1
-          (5 e 5) = 1 0 0 0 0
-          (6 e 6) = 1 0 0 0 1
-          (7 e 7) = 1 0 0 1 0
-
-      - int53
-        1 1 1 1 1 1 1 1
-        |   | | |     |
-        |   | | |     |
-        |   | | |     |
-        |   | | |     |
-        |   | | |     |
-        |   | | +-----+--- Descartado
-        |   | |
-        |   | +----------- 1 bit byte mais significativo cabe nos proximos bits 4?
-        +---+------------- 3 bits (= 8 valores) quantos bytes [chars] é usado pelo int53 na sequencia
-
-
-      - double
-      - string
-        0 1 1 1 1 1 1 1
-        | |   | |     |
-        | |   | |     |
-        | |   | |     |
-        | |   | |     |
-        | |   | |     |
-        | |   | +-----+-- Descartado
-        | |   |
-        | +---+---------- 3 bits (= 8 valores) quantos bytes [chars] é usado pelo int64 na sequencia
-        |
-        +---------------- 1 bit IS ARRAY = false
-
-      - SchemaRef
-
-      1 1 1 1 1 1 1 1
-      | | | | | | | |
-      | | | | | | | +--
-      | | | | | | +----
-      | | | | | +------
-      | | | | +--------
-      | | | +----------
-      | | +------------
-      | +--------------
-      +---------------- IS ARRAY ?
-  
-
-    KEY_ID ENCODED_VALUE
-
--- INT32 = | 1 1 1 1 1 1 1 1 | 1 1 1 1 1 1 1 1 | 1 1 1 1 1 1 1 1 | 1 1 1 1 1 1 1 1 |
-
--- Double interger = 2^52
--- INT52 = | 1 1 1 1 1 1 1 1 | 1 1 1 1 1 1 1 1 | 1 1 1 1 1 1 1 1 | 1 1 1 1 1 1 1 1 | 1 1 1 1 1 1 1 1 | 1 1 1 1 1 1 1 1 | 1 1 1 1 1 
-
--- STRING = Unlimited
-
-1 1 1 1 1 1 1 1
-| | | | | | | |
-| | | | | | | +---
-| | | | | | +-----
-| | | | | +-------
-| | | | +---------
-| | | +-----------
-| | +-------------
-| +---------------
-+-----------------
+| Option            | Type        | Description |
+| ----------------- | ----------- | ----------- |
+| **`Default`**     | `any`       | Allows you to set the default value for the field |
+| **`MaxLength`**   | `number`    | Only for the `string` and `string[]` types, allows you to define the maximum text size |
+| **`ToSerialize`** | `function`  | Invoked before serializing a value, `function (schema, field, value): value` |
+| **`ToInstance`**  | `function`  | Invoked after deserializing a value, `function (schema, field, value): value` |
 
 
 
+> The `ToSerialize` and` ToInstance` methods allow customization of the data, both to serialize and to instantiate. Internally it is used in [Roblox standard type converters] (https://github.com/nidorx/roblox-schema/blob/main/src/Shared/Lib/Converters.lua)
 
-A informação sobre o tamanho do caractere é salvo em um caractere UTF-8 de 2 bytes
--- https://design215.com/toolbox/ascii-utf8.php
-1 1 1 1 1 1 1 1
-| | | | | | | |
-| | | | | | | +--- has more?
-| | | | | | +-----
-| | | | | +-------
-| | | | +---------
-| | | +-----------
-| | +-------------
-| +--------------- Se 0 menor que 184 (incrementa 92), se 1 maior que 92 (incremente 184)
-+----------------- Se 0, menor que 92, se 1 valida proximo
+
+### Assigning Ids
+
+As you can see, in addition to Schema, each field has a unique number. These numbers are used to identify your scheme and fields in serialized format and should not be changed after your scheme is in use.
+
+StructDef allows the definition of up to 255 schemas (from 0 to 254) and up to 16 fields per schema (from 0 to 15). At the time of serialization, the schema Id spends one byte to encode and the field id, which is encoded along with other information, consumes 4 more bits (you can find out more about this in [Structure Definition Encoding](ENCODING.md)).
+
+### Specifying Field Types
+
+The data types available for use in StructDef are defined below.
+
+
+#### int32, int32[]
+
+Allows you to define a 32-bit INTEGER field, with values from `-4,294,967,295` to `4,294,967,295` _(`-((2^32) -1)` to `(2^32) -1`)_
+
+```lua
+local MySchema = StructDef.Schema(1)
+   :Field(0, 'Points',    'int32')
+   :Field(1, 'WeaponIds', 'int32[]')
+
+local data = {
+  Points    = 35625737,
+  WeaponIds = {13883, 33655, 6533, 75567}
+}  
+
+-- prints "A@ha`=#c.$Ab+txX^I={;K#IQJ"
+print(MySchema:Serialize(data)) 
+```
+
+
+#### int53, int53[]
+
+Allows you to define a 53-bit INTEGER field, with values from `-9,007,199,254,740,991` to `9,007,199,254,740,991` _(`-((2^53) -1)` to `(2^53) -1`)_
+
+The `int53` (the **MAX SAFE INTEGER**), has a value of `9007199254740991` (`9,007,199,254,740,991` or ~9 quadrillion). The reasoning behind that number is that LUA uses [double-precision floating-point format numbers](https://en.wikipedia.org/wiki/Double-precision_floating-point_format) as specified in [IEEE 754](https://en.wikipedia.org/wiki/IEEE_754) and can only safely represent integers between `-(2^53 - 1)` and `2^53 - 1`.
+
+Safe in this context refers to the ability to represent integers exactly and to correctly compare them. For example, `9007199254740991 + 1 == 9007199254740991 + 2` will evaluate to `true`, which is mathematically incorrect. See [NumberValue](https://developer.roblox.com/en-us/api-reference/class/NumberValue) for more information.
+
+
+```lua
+local MySchema = StructDef.Schema(1)
+   :Field(0, 'EXP',     'int53')
+   :Field(1, 'UserIds', 'int53[]')
+
+local data = {
+  EXP       = 47199254740991,
+  UserIds = {13883, 33655, 6533, 75567}
+}  
+
+print(MySchema:Serialize(data))
+```
+
+#### double, double[]
+
+[Double-precision floating-point number](https://en.wikipedia.org/wiki/Double-precision_floating-point_format), limited to four decimal places (n.1234). See [NumberValue](https://developer.roblox.com/en-us/api-reference/class/NumberValue) for more information.
+
+```lua
+local MySchema = StructDef.Schema(1)
+   :Field(0, 'Elevation', 'double')
+   :Field(1, 'Points',    'double[]')
+
+local data = {
+  Elevation = 5.666,
+  Points    = {3.4253, 123.655, 7.75277, 8.7655}
+}  
+
+-- prints "PPdaCp=#F('<&W)%2d)A;]))?-(*?PJ"
+print(MySchema:Serialize(data))
+```
+
+#### bool, bool[]
+
+Booleans
+
+```lua
+local MySchema = StructDef.Schema(1)
+   :Field(0, 'IsActive',  'bool')
+   :Field(1, 'Flags',     'bool[]')
+
+local data = {
+  IsActive = true,
+  Flags    = {true, false, true, false}
+}  
+
+-- prints "G`=#2SRJ"
+print(MySchema:Serialize(data))
+```
+
+#### string, string[]
+
+o StructDef Saves UTF-8 _AS IS_ text, without encoding
+
+```lua
+local MySchema = StructDef.Schema(1)
+   :Field(0, 'Username',  'string')
+   :Field(1, 'Messages',  'string[]')
+
+local data = {
+  Username  = 'nidorx',
+  Messages  = {'Foo © bar 𝌆 baz ☃ qux!', "!#$%&'()*+,-./012"}
+}  
+
+print(MySchema:Serialize(data))
+```
+
+#### Schema
+
+Allows you to use a schema as a data type. This allows the construction of complex structures.
+
+```lua
+local MarkSchema = StructDef.Schema(1)
+   :Field(0, 'Elevation', 'double')
+   :Field(1, 'Points',    'double[]')
+
+local PetSchema = StructDef.Schema(2)
+   :Field(0, 'EXP',     'int32')
+   :Field(1, 'Buffers', 'int32[]')
+
+local AvatarSchema = StructDef.Schema(3)
+   :Field(0, 'Username',  'string')
+   :Field(1, 'Mark',  MarkSchema)
+   :Field(2, 'Pets',  PetSchema, { IsArray = true })
+
+local data = {
+  Username  = 'nidorx',
+  Mark =  {
+    Elevation = 5.666,
+    Points    = {3.4253, 123.655, 7.75277, 8.7655}
+  },
+  Pets = {
+    {
+      EXP     = 456282,
+      Buffers = {13883, 33655, 6533, 75567}
+    },
+    {
+      EXP     = 471992547,
+      Buffers = {1383, 33655, 6533, 75567}
+    } 
+  }
+}  
+
+-- prints "U~=%gLnidorx+PPdaCp=#F('<&W)%2d)A;]))?-(*?PJ<CAQC=$c*(a}txX^I={;K#IQZ@qTPp=$c.>D*Mtx'-I={;K#IQJJ"
+print(AvatarSchema:Serialize(data)) 
+```
+
+
+#### RobloxType
+
+StructDef allows the use of several standard [Roblox types](https://developer.roblox.com/en-us/api-reference/data-types) as a data type. Internally it is converted to one of the primitive types above.
+
+> **Work in progress!**  You can contribute by creating new converters in the [Converters.lua](https://github.com/nidorx/roblox-schema/blob/main/src/Shared/Lib/Converters.lua)
+ file and making a pull request
+
+- Vector3
+- <s>Vector3Value</s>
+- <s>Vector2</s>
+- <s>CFrame</s>
+- <s>CFrameValue</s>
+- <s>Color3</s>
+- <s>Color3Value</s>
+- <s>BrickColor</s>
+- <s>DateTime</s>
+- <s>Rect</s>
+- <s>Region3</s>
+- <s>Enum, EnumItem, Enums</s>
+- <s>BoolValue</s>
+- <s>BrickColorValue</s>
+- <s>IntValue</s>
+- <s>IntConstrainedValue</s>
+- <s>NumberValue</s>
+- <s>DoubleConstrainedValue</s>
+- <s>StringValue</s>
+
+
+```lua
+local MySchema = StructDef.Schema(1)
+   :Field(0, 'Velocity',    Vector3)
+   :Field(1, 'CheckPoints', Vector3, { IsArray = true })
+
+local data = {
+  Velocity    = Vector3.new(0, 1.4, 0),
+  CheckPoints = {
+    Vector3.new(24.6678, 21.6678, 27.5678),
+    Vector3.new(3.6678, 21.6678, 7.5678),
+    Vector3.new(-90.8755, 23.1341, 543.7662),
+  }
+}  
+
+-- prints "PH`@@@H@G`=#V#!)#1f!!W):<8)7<8)=8P)%<7)7<8))8PM}DU)9'_0$A?WJ"
+print(MySchema:Serialize(data))
+```
+
+## Building your own StructDef
+
+### To edit
+1. Make sure Rojo 0.5.x or later is installed
+2. Clone this repository to your computer
+3. Set the location to this repo's root directory and run this command in CMD/PowerShell/Cmder:
+    ```
+    rojo serve
+    ```
+4. Create a new project on Roblox Studio and install Rojo Plugin, then, connect
+5. Edit sources with Visual Studio Code, all changes will replicated automaticaly to Roblox Studio
+
+
+### To build
+
+In the terminal, enter the following:
+
+```
+npm install
+npm run build
+```
+
+##  @TODO
+- [ ] Improve documentation
+- [ ] Create all Roblox Type converters
+- [ ] UnitTest & Coverage
+- [ ] Benchmark
+
+## Feedback, Requests and Roadmap
+
+Please use [GitHub issues] for feedback, questions or comments.
+
+If you have specific feature requests or would like to vote on what others are recommending, please go to the [GitHub issues] section as well. I would love to see what you are thinking.
+
+## Contributing
+
+You can contribute in many ways to this project.
+
+### Translating and documenting
+
+I'm not a native speaker of the English language, so you may have noticed a lot of grammar errors in this documentation.
+
+You can FORK this project and suggest improvements to this document (https://github.com/nidorx/roblox-struct-def/edit/master/README.md).
+
+If you find it more convenient, report a issue with the details on [GitHub issues].
+
+### Reporting Issues
+
+If you have encountered a problem with this component please file a defect on [GitHub issues].
+
+Describe as much detail as possible to get the problem reproduced and eventually corrected.
+
+### Fixing defects and adding improvements
+
+1. Fork it (<https://github.com/nidorx/roblox-struct-def/fork>)
+2. Commit your changes (`git commit -am 'Add some fooBar'`)
+3. Push to your master branch (`git push`)
+4. Create a new Pull Request
+
+## License
+
+This code is distributed under the terms and conditions of the [MIT license](LICENSE).
+
+
+[GitHub issues]: https://github.com/nidorx/roblox-struct-def/issues

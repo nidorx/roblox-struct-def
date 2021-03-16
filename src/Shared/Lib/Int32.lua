@@ -25,8 +25,9 @@ local INT8_MAX   = 255                 --  (2^8) -1   [1 byte]
 local INT16_MAX  = 65535               -- (2^16) -1  [2 bytes]
 local INT24_MAX  = 16777215            -- (2^24) -1  [3 bytes]
 local INT32_MAX  = 4294967295          -- (2^32) -1  [4 bytes]
-local INT53_MAX  = 281474976710655     -- (2^48) -1  [6 bytes]
 
+-- 9007199254740992
+--  281474976710655
 --[[
    Faz o encode de um int32, no formato <{EXTRA}[{VALUE}]?>
 
@@ -403,7 +404,6 @@ Module.INT8_MAX                      = INT8_MAX
 Module.INT16_MAX                     = INT16_MAX
 Module.INT24_MAX                     = INT24_MAX
 Module.INT32_MAX                     = INT32_MAX
-Module.INT53_MAX                     = INT53_MAX
 Module.INT_EXTRA_BITMASK_NEGATIVE    = INT_EXTRA_BITMASK_NEGATIVE
 Module.INT_EXTRA_BITMASK_IT_FITS     = INT_EXTRA_BITMASK_IT_FITS
 Module.INT_EXTRA_BITMASK_VALUE       = INT_EXTRA_BITMASK_VALUE

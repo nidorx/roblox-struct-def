@@ -6,7 +6,7 @@ local encode_field                     = Core.encode_field
 local FIELD_TYPE_BITMASK_STRING        = Core.FIELD_TYPE_BITMASK_STRING
 
 local Int32 = require(game.ReplicatedStorage:WaitForChild('Lib'):WaitForChild('Int32'))
-local INT8_MAX                      = Int32.INT8_MAX
+local INT8_MAX                         = Int32.INT8_MAX
 
 local STRING_EXTRA_BITMASK_SIZE_FITS   = 128    -- 10000000
 local STRING_EXTRA_BITMASK_SIZE        = 127    -- 01111111

@@ -11,12 +11,11 @@ local INT8_MAX                      = Int32.INT8_MAX
 local INT16_MAX                     = Int32.INT16_MAX
 local INT24_MAX                     = Int32.INT24_MAX
 local INT32_MAX                     = Int32.INT32_MAX
-local INT53_MAX                     = Int32.INT53_MAX
 local INT_EXTRA_BITMASK_NEGATIVE    = Int32.INT_EXTRA_BITMASK_NEGATIVE
 local INT_EXTRA_BITMASK_BYTE_COUNT  = Int32.INT_EXTRA_BITMASK_BYTE_COUNT
 local INT_EXTRA_BITMASK_NUM_BYTES   = Int32.INT_EXTRA_BITMASK_NUM_BYTES
 
-
+local INT53_MAX                        = 9007199254740991    -- (2^53) -1  [7 bytes]
 local INT53_EXTRA_BITMASK_IS_BIG       = 32  -- 00100000
 local INT53_EXTRA_BITMASK_HAS_MORE     = 16  -- 00010000
 local INT53_EXTRA_BITMASK_BYTE_COUNT   = 3   -- 00000011
@@ -46,8 +45,7 @@ local INT53_EXTRA_BITMASK_NUM_BYTES = {
       +----------------- 1 bit   0 = POSITIVO, 1 = NEGATIVO
 
    [{VALUE}]
-      Até 7 bytes do numero sendo serializado
-      Quando número é <= 63 (2^6)-1 o valor já é serializado no {EXTRA}
+      Até 6 bytes do numero sendo serializado
 
    @header     {Object} Referencia para o header
    @out        {array}  O output sendo gerado
@@ -127,9 +125,15 @@ local function encode_int53_out(header, out, value, hasMore)
       -- numero de bytes usados pelo multiplicador (até 2)
       if times <= INT8_MAX then
          bytes[#bytes + 1] = times
+
+      elseif times <= INT16_MAX then
+         byteExtra = bor(byteExtra, INT_EXTRA_BITMASK_NUM_BYTES[2])         
+         bytes[#bytes + 1] = band(rshift(times, 8), 0xFF)
+         bytes[#bytes + 1] = band(times, 0xFF)
          
       else
-         byteExtra = bor(byteExtra, INT_EXTRA_BITMASK_NUM_BYTES[2])         
+         byteExtra = bor(byteExtra, INT_EXTRA_BITMASK_NUM_BYTES[3])         
+         bytes[#bytes + 1] = band(rshift(times, 16), 0xFF)
          bytes[#bytes + 1] = band(rshift(times, 8), 0xFF)
          bytes[#bytes + 1] = band(times, 0xFF)
       end 
@@ -232,8 +236,10 @@ local function decode_int53_bytes(bytes, isNegative, timesBytes, restBytes)
 
    if timesBytes == 1 then
       times = bytes[1]
-   else
+   elseif timesBytes == 2 then
       times = bor(lshift(bytes[1], 8), bytes[2])
+   else
+      times = bor(lshift(bytes[1], 16), bor(lshift(bytes[2], 8), bytes[3]))
    end
 
    if restBytes == 1 then
@@ -310,9 +316,10 @@ local function encode_int53_array(header, field, values)
 end
 
 local Module = {}
-Module.encode_int53_out           = encode_int53_out
-Module.encode_int53         = encode_int53
-Module.decode_int53_extra_byte    = decode_int53_extra_byte
-Module.decode_int53_bytes         = decode_int53_bytes
-Module.encode_int53_array   = encode_int53_array
+Module.encode_int53_out          = encode_int53_out
+Module.encode_int53              = encode_int53
+Module.decode_int53_extra_byte   = decode_int53_extra_byte
+Module.decode_int53_bytes        = decode_int53_bytes
+Module.encode_int53_array        = encode_int53_array
+Module.INT53_MAX                 = INT53_MAX
 return Module

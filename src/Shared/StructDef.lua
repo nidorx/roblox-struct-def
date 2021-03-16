@@ -1,11 +1,14 @@
 --[[
-   Roblox Schema v1.0.0 [2021-02-28 22:10]
+   Roblox StructDef v1.0.0 [2021-02-28 22:10]
 
-   Sistema de serialização inspirado no protobuf, com foco em saídas UTF-8
+   The Structure Definition, or simply StructDef, is a library that allows the 
+   serialization and deserialization of structured data. You define how you want 
+   your data to be structured once and then you can use the generated instance 
+   to easily write and read your structured data to and from a UTF-8 string.
 
-   https://github.com/nidorx/roblox-schema
+   https://github.com/nidorx/roblox-struct-def
 
-   Discussions about this script are at https://devforum.roblox.com/t/FORUM_ID
+   Discussions about this script are at https://devforum.roblox.com/t/ID_FORUM
 
    ------------------------------------------------------------------------------
 
@@ -850,7 +853,10 @@ end
 local Schema = {}
 Schema.__index = Schema
 
-local function parse_primitive_field(fieldType, field, param1, defaultValue)
+local function parse_primitive_field(fieldType, field, options)
+
+   local defaultValue   = options.Default
+   local maxLength      = options.MaxLength
 
    if fieldType == 'int32' then 
       field.EncodeFn = encode_int32
@@ -917,7 +923,7 @@ local function parse_primitive_field(fieldType, field, param1, defaultValue)
       field.Type        = FIELD_TYPE_BITMASK_STRING
       field.MaxLength   = STRING_MAX_SIZE
 
-      local maxLength = param1
+      local maxLength = maxLength
       if maxLength ~= nil and type(maxLength) == 'number' then
          field.MaxLength = math.floor(maxLength)
          if field.MaxLength <= 0 then
@@ -932,6 +938,7 @@ local function parse_primitive_field(fieldType, field, param1, defaultValue)
             defaultValue  = ''
          end
       else
+         field.IsArray  = true
          field.EncodeFn = encode_string_array
          if defaultValue == nil then 
             defaultValue  = {}
@@ -949,7 +956,13 @@ end
 --[[
    Permite adicionar um campo no Schema
 ]]
-function Schema:Field(id, name, fieldType, param1, defaultValue, convertToSerialize, convertToInstance)
+function Schema:Field(id, name, fieldType, options)
+
+   if options == nil then
+      options = {}
+   end
+
+   -- param1, param2, convertToSerialize, convertToInstance
    
    if id == nil or type(id) ~= 'number' or math.floor(id) ~= id or id < 0 or id > 16 then
       error('O Id do campo deve ser um número inteiro entre 0 e 16')
@@ -978,16 +991,14 @@ function Schema:Field(id, name, fieldType, param1, defaultValue, convertToSerial
    field.Name     = name
    field.IsArray  = false
 
-   if parse_primitive_field(fieldType, field, param1) then
+   if parse_primitive_field(fieldType, field, options) then
       -- is primitive - OK
    elseif fieldType.isSchema then
       -- schema ref
       field.Type     = FIELD_TYPE_BITMASK_SCHEMA
       field.Schema   = fieldType
 
-      local isArray = param1
-      
-      if isArray then
+      if options.IsArray then
          field.IsArray  = true
          field.EncodeFn = encode_schema_array
       else
@@ -1001,26 +1012,25 @@ function Schema:Field(id, name, fieldType, param1, defaultValue, convertToSerial
          error('O Tipoo de dado do campo é inválido')
       end
       
-      local isArray = param1
-      if isArray then 
-         parse_primitive_field(converter[2][1], field, param1)
+      if options.IsArray then 
+         parse_primitive_field(converter[2][1], field, options)
          field.Default              = converter[2][2]
          field.ConvertToSerialize   = converter[2][3]
          field.ConvertToInstance    = converter[2][4]
       else 
-         parse_primitive_field(converter[1][1], field, param1)
+         parse_primitive_field(converter[1][1], field, options)
          field.Default              = converter[1][2]
          field.ConvertToSerialize   = converter[1][3]
          field.ConvertToInstance    = converter[1][4]
       end
    end 
    
-   if field.ConvertToSerialize == nil and type(convertToSerialize) == 'function' then
-      field.ConvertToSerialize = convertToSerialize
+   if field.ConvertToSerialize == nil and type(options.ToSerialize) == 'function' then
+      field.ConvertToSerialize = options.ToSerialize
    end
 
-   if field.ConvertToInstance == nil and type(convertToInstance) == 'function' then 
-      field.ConvertToInstance = convertToInstance
+   if field.ConvertToInstance == nil and type(options.ToInstance) == 'function' then 
+      field.ConvertToInstance = options.ToInstance
    end
 
    table.insert(self.Fields, field)
@@ -1068,12 +1078,12 @@ end
 local function CreateSchema(id)
 
    if type(id) == 'number' then
-      if id < 0  or id > 220 then
-         -- sistema reserva 35 ids para uso interno, para permitir uso de Vector3 e outras instancias comuns
-         error('O id do eschema deve ser >= 0 e <= 220')
+      if id < 0  or id > 254 then
+         error('O id do eschema deve ser >= 0 e <= 254')
       end
          
       if SCHEMA_BY_ID[id] ~= nil then
+         print(SCHEMA_BY_ID[id], SCHEMA_BY_ID)
          error('Já existe um schema registrado com o Id informado')
       end
    
@@ -1095,7 +1105,7 @@ local function CreateSchema(id)
    end
 end
 
-local Module = {}
-Module.Create        = CreateSchema
-Module.Deserialize   = deserialize
-return Module
+local StructDef = {}
+StructDef.Schema        = CreateSchema
+StructDef.Deserialize   = deserialize
+return StructDef

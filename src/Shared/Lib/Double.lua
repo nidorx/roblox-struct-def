@@ -22,13 +22,14 @@ local INT8_MAX                      = Int32.INT8_MAX
 local INT16_MAX                     = Int32.INT16_MAX
 local INT24_MAX                     = Int32.INT24_MAX
 local INT32_MAX                     = Int32.INT32_MAX
-local INT53_MAX                     = Int32.INT53_MAX
 local INT_EXTRA_BITMASK_NEGATIVE    = Int32.INT_EXTRA_BITMASK_NEGATIVE
 local INT_EXTRA_BITMASK_BYTE_COUNT  = Int32.INT_EXTRA_BITMASK_BYTE_COUNT
 local INT_EXTRA_BITMASK_NUM_BYTES   = Int32.INT_EXTRA_BITMASK_NUM_BYTES
 
-local DBL_EXTRA_BITMASK_IS_BIG      = 64  -- 01000000
-local DBL_EXTRA_BITMASK_INT_MULT    = 32  -- 00100000
+local Int53 = require(game.ReplicatedStorage:WaitForChild('Lib'):WaitForChild('Int53'))
+local INT53_MAX   = Int53.INT53_MAX
+
+local DBL_EXTRA_BITMASK_INT_MULT_M  = 96  -- 01100000
 local DBL_EXTRA_BITMASK_INT_REST_M  = 24  -- 00011000
 local DBL_EXTRA_BITMASK_HAS_DEC     = 4   -- 00000100
 local DBL_EXTRA_BITMASK_DEC_BYTES   = 2   -- 00000010
@@ -42,8 +43,15 @@ local DBL_EXTRA_BITMASK_INT_REST = {
    24    -- 00011000   = 4 bytes
 }
 
+local DBL_EXTRA_BITMASK_INT_MULT = {
+   0,    -- 00000000   = 0 byte
+   32,   -- 00100000   = 1 bytes
+   64,   -- 01000000   = 2 bytes
+   96    -- 01100000   = 3 bytes
+}
+
 --[[
-   Lógica comum aos métodos encode_int53 e encode_int53_array
+   Lógica comum aos métodos encode_double e encode_double_array
 
    Faz o encode de um double, no formato <{EXTRA}[{VALUE}]?>
 
@@ -51,12 +59,11 @@ local DBL_EXTRA_BITMASK_INT_REST = {
       1 1 1 1 1 1 1 1
       | | | | | | | |
       | | | | | | | |
-      | | | | | | | +--- 1 bits  HAS_MORE? Usado pelo encode_int53_array para indicar continuidade
+      | | | | | | | +--- 1 bits  HAS_MORE? Usado pelo encode_double_array para indicar continuidade
       | | | | | | +----- 1 bit   quantos bytes [chars] é usado pelos decimais (2 valores)
       | | | | | +------- 1 bit   Número possui decimais
       | | | +-+--------- 2 bits  quantos bytes [chars] é usado pelo int32 do resto (4 valores)
-      | | +------------- 1 bits  quantos bytes [chars] é usado pelo int32 do multiplicador (2 valores), quando BIG
-      | +--------------- 1 bits  Número é maior que 32 bits, caso positivo foi quebrado em times e rest
+      | +-+------------- 2 bits  quantos bytes [chars] é usado pelo int32 do multiplicador (4 valores), quando BIG
       +----------------- 1 bit   0 = POSITIVO, 1 = NEGATIVO
 
    [{VALUE}]
@@ -83,14 +90,15 @@ local function encode_double_out(header, out, value, hasMore)
 
    local hasDecimal = false
 
-   -- normaliza o número para o limite do int53
-   value = math.abs(value)
+   value       = math.abs(value)
    local int53 = math.floor(value)
+   local dec   = math.floor((value - int53) * 10000)
    
    if int53 ~= value then
       hasDecimal = true 
    end
    
+   -- normaliza o número para o limite do int53
    int53 = math.min(INT53_MAX, math.max(0, int53))
 
    local bytes = {}
@@ -138,18 +146,22 @@ local function encode_double_out(header, out, value, hasMore)
       -- número maior que 32 bits, não é possível fazer manipulação usando a lib bit32, necessário quebrar o número
       -- desse modo cabe em até 6 bytes
 
-      -- número é grande
-      byteExtra = bor(byteExtra, DBL_EXTRA_BITMASK_IS_BIG)
-
       local times = math.floor(int53/INT32_MAX)-1
       local rest = int53 - (times+1)*INT32_MAX
 
       -- numero de bytes usados pelo multiplicador (até 2)
       if times <= INT8_MAX then
+         byteExtra = bor(byteExtra, DBL_EXTRA_BITMASK_INT_MULT[2])
          bytes[#bytes + 1] = times
+
+      elseif times <= INT16_MAX then
+         byteExtra = bor(byteExtra, DBL_EXTRA_BITMASK_INT_MULT[3])         
+         bytes[#bytes + 1] = band(rshift(times, 8), 0xFF)
+         bytes[#bytes + 1] = band(times, 0xFF)
          
       else
-         byteExtra = bor(byteExtra, DBL_EXTRA_BITMASK_INT_MULT)         
+         byteExtra = bor(byteExtra, DBL_EXTRA_BITMASK_INT_MULT[4])         
+         bytes[#bytes + 1] = band(rshift(times, 16), 0xFF)
          bytes[#bytes + 1] = band(rshift(times, 8), 0xFF)
          bytes[#bytes + 1] = band(times, 0xFF)
       end 
@@ -183,7 +195,7 @@ local function encode_double_out(header, out, value, hasMore)
       -- numero de bytes usados pelo decimal (até 2)
       byteExtra = bor(byteExtra, DBL_EXTRA_BITMASK_HAS_DEC)
 
-      local dec = math.floor((value - int53) * 10000)
+      
 
       if dec <= INT8_MAX then
          bytes[#bytes + 1] = dec
@@ -272,8 +284,8 @@ end
 local function decode_double_extra_byte(byteExtra)
    local extra = {}
    extra.IsNegative  = band(byteExtra, INT_EXTRA_BITMASK_NEGATIVE) ~= 0
-   extra.IsBig       = band(byteExtra, DBL_EXTRA_BITMASK_IS_BIG)  ~= 0
-   extra.BytesTimes  = rshift(band(byteExtra, DBL_EXTRA_BITMASK_INT_MULT), 5) + 1
+   extra.BytesTimes  = rshift(band(byteExtra, DBL_EXTRA_BITMASK_INT_MULT_M), 5)
+   extra.IsBig       = extra.BytesTimes > 0
    extra.BytesRest   = rshift(band(byteExtra, DBL_EXTRA_BITMASK_INT_REST_M), 3) + 1
    extra.HasDec      = band(byteExtra, DBL_EXTRA_BITMASK_HAS_DEC) ~= 0
    extra.BytesDec    = rshift(band(byteExtra, DBL_EXTRA_BITMASK_DEC_BYTES), 1) + 1
@@ -313,8 +325,10 @@ local function decode_double_bytes(bytes, extra)
       decIndex = timesBytes + restBytes + 1
       if timesBytes == 1 then
          times = bytes[1]
-      else
+      elseif timesBytes == 2 then
          times = bor(lshift(bytes[1], 8), bytes[2])
+      else
+         times = bor(lshift(bytes[1], 16), bor(lshift(bytes[2], 8), bytes[3]))
       end
    
       if restBytes == 1 then

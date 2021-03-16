@@ -4,7 +4,7 @@
    "compressStrings": true,
    "compressFields": true,
    "entries": [
-      "src/Shared/Schema.lua"
+      "src/Shared/StructDef.lua"
    ],
    "dontIgnoreVarDir": [
    ]
