@@ -1,6 +1,6 @@
 local bor, band, rshift, lshift = bit32.bor, bit32.band, bit32.rshift, bit32.lshift
 
--- os caracteres usados para encodar os valores numéricos e marcadores dos objetos
+-- the characters used to encode the numeric values and markers of the objects
 local CHARS = {
    "#","$","%","&","'","(",")","*","+",",","-",".","/",
    "0","1","2","3","4","5","6","7","8","9",":",";","<",
@@ -10,18 +10,18 @@ local CHARS = {
    "e","f","g","h","i","j","k","l","m","n","o","p","q",
    "r","s","t","u","v","w","x","y","z","{","|","}","~"
 }
-CHARS[0] = '!' -- indice no lua começa em 1, resolvido
+CHARS[0] = '!' -- lua index starts at 1
 
--- indice reverso, usado para realizar o decode
+-- reverse index, used to perform the decode
 local CHARS_BY_KEY = {}
 for i =0, table.getn(CHARS) do
    CHARS_BY_KEY[CHARS[i]] = i
 end
 
--- O marcador do fim de schema (para schemas aninhados)  (00111100, 60, <)
+-- The schema end marker (for nested schemas) (00111100 = 60 = <)
 local HEADER_END_MARK = '<'
 
--- os tipos de campos possíveis
+-- the types of fields available (BITMASK)
 local FIELD_TYPE_BITMASK_BOOL        = 0   -- 00000000
 local FIELD_TYPE_BITMASK_BOOL_ARRAY  = 32  -- 00100000
 local FIELD_TYPE_BITMASK_INT32       = 64  -- 01000000
@@ -32,23 +32,28 @@ local FIELD_TYPE_BITMASK_SCHEMA      = 192 -- 11000000
 local FIELD_TYPE_BITMASK_SCHEMA_END  = 224 -- 11100000 - Marca o fim de um schema
 
 --[[
-   Mascara usada para extrair os dados de um byte do header, conforme modelo
+   Bit mask used to extract data from a header byte, according to the model
 
    1 1 1 1 1 1 1 1
-   |   | | |     |
-   |   | | +-----+--- 4 bits para identificar o campo, portanto, um schema pode ter no máximo 16 campos (2^4)
-   |   | |            
-   |   | +----------- 1 bit  IS ARRAY flag que determina se é array
-   +---+------------- 3 bits determina o tipo do dado
+      |   | | |     |
+      |   | | +-----+--- 4 bits  The field id, therefore, a schema can have a maximum of 16 ((2^4)-1) fields (0 to 15) 
+      |   | |            
+      |   | +----------- 1 bit   IS_ARRAY flag that determines whether the item is an array
+      |   |                         Exception FIELD_TYPE_BITMASK_BOOL, which uses this bit to store the value
+      |   |
+      +---+------------- 3 bits  determines the FIELD_TYPE
 ]]
 local FIELD_BITMASK_FIELD_ID    = 15  -- 00001111
 local FIELD_BITMASK_IS_ARRAY    = 16  -- 00010000
 local FIELD_BITMASK_FIELD_TYPE  = 224 -- 11100000
 
--- O byte vazio do header
+-- The empty byte of the header
 local HEADER_EMPTY_BYTE = 64 -- 1000000 (64 @)
 
--- os 6 LSB 
+-- The header end marker (00111101, 61, =)
+local HEADER_END_MARK = '='
+
+-- the 6 LSB
 local HEADER_BITMASK_INDEX = {
    32, -- 100000
    16, -- 010000
@@ -59,7 +64,7 @@ local HEADER_BITMASK_INDEX = {
 }
 
 --[[
-   Apenas para depuração e logs, obtém o nome do field a partir do tipo
+   For debugging and logs only, gets the field name from the type
 ]]
 local function get_field_type_name(fieldType, isArray)
 
@@ -104,21 +109,22 @@ local function get_field_type_name(fieldType, isArray)
    end
 end
 
--- local Lib = game.ReplicatedStorage:WaitForChild("Lib")
--- require(game.ReplicatedStorage:WaitForChild("Lib"):WaitForChild("Promise"))
+--[[
+   check if you need to increment the header for the next byte
+   
+   The header is used to determine the range of the byte being worked on.
 
--- verifica se precisa incrementar o header para o proximo byte
--- 
--- O header é usado para determinar o range do byte sendo trabalhado. 
--- Durante o encode, quando o byte é: 
---    < 92            Salva as is e mapeia o bit 0 no header
---    > 92 e < 184    Subtrai 92 para mapear e mapeia o bit atual como 1 e o seguinte como 0
---    > 184           Subtrai 184 para mapear e mapeia o bit atual e o seguinte como 1
--- Durante o decode, verifica no header como o byte atual está salvo, permitindo descobrir o valor correto do byte
--- usa 6 LSB de 1000000 (64 @) até 1111111 (127 DEL), porém, ao persistir, substitui 
---    A) 01011100 (92  \)   por 00111110 (62 >)
---    B) 11111111 (127 DEL) por 00111111 (63 ?)
--- ao reverter, faz a substituição inversa
+   During encode, when the byte is:
+      < 92            Saves the is and maps bit 0 in the header
+      > 92 e < 184    Subtracts 92 to map and maps the current bit to 1 and the next one to 0
+      > 184           Subtracts 184 to map and maps the current bit and the next one as 1
+
+   During the decode, it checks in the header how the current byte is saved, allowing to find the correct value of the 
+   byte uses 6 LSB of 1000000 (64 @) until 1111111 (127 DEL). However, when it persists, it replaces
+      A) 01011100 (92  \)   for 00111110 (62 >)
+      B) 11111111 (127 DEL) for 00111111 (63 ?)
+   when deserializing, it makes the inverse substitution
+]]
 local function header_increment(header)
    if header.index > 6 then
       -- 01011100 (92  \) -> 00111110 (62 >)
@@ -138,27 +144,25 @@ local function header_increment(header)
    end
 end
 
--- O marcador do fim cabeçalho (00111101, 61, =)
-local HEADER_END_MARK = '='
 
--- garante que o header está fechado. Este método só deve ser invocado no último passo do processo de serialização
+-- ensures that the header is closed. This method should only be invoked in the last step of the serialization process.
 local function header_flush(header)
    if header.index > 1 then
       header.index = 7
       header_increment(header)
    end
 
-   -- adiciona o marcador do fim cabeçalho
+   -- adds the header end marker
    header.content[#header.content + 1] = HEADER_END_MARK
    header.content = table.concat(header.content, '')
 end
 
 --[[
-   Faz o encode de um byte (inteiro entre 0 e 255) para o seu correlacionado em ASCII válido a referencia do header 
-   é necessário para garantir a deserialização do item
+   Encode a byte (integer between 0 and 255) for its correlated in valid ASCII the header reference is necessary to 
+   guarantee the item deserialization
 
-   @header  {Object}    Referencia para o header da serialização
-   @byte    {int8}      O byte que será transformado para a sua referencia como char
+   @header  {Object} Reference to the serialization header
+   @byte    {byte}   The byte that will be transformed for your reference as char
 
    @return {char}
 ]]
@@ -171,7 +175,7 @@ local function encode_byte(header, byte)
    elseif byte < 184 then
       out = CHARS[byte - 92]
 
-      -- Usa 2 bits no header, no formato 10
+      -- Uses 2 bits in the header, in format 10
 
       -- 0001 | 00010 = 0011
       header.byte = bor(header.byte, HEADER_BITMASK_INDEX[header.index])
@@ -182,7 +186,7 @@ local function encode_byte(header, byte)
    else
       out = CHARS[byte - 184]
 
-      -- Usa 2 bits no header, no formato 11
+      -- Uses 2 bits in the header, in format 11
 
       -- 0001 | 00010 = 0011
       header.byte = bor(header.byte, HEADER_BITMASK_INDEX[header.index])
@@ -199,9 +203,9 @@ local function encode_byte(header, byte)
 end
 
 --[[
-   Faz o decode de um char que foi serializado pelo método encode_byte
+   Decodes a char that has been serialized by the encode_byte method
 
-   @return {int8} 
+   @return {byte} 
 ]]
 local function decode_char(header, char)
    local byte = CHARS_BY_KEY[char]
@@ -218,23 +222,20 @@ local function decode_char(header, char)
 end
 
 --[[
-   FIELD {8 bits} 
-      É a definição da chave do campo do esquema
-      Quando uma mensagem é codificada, as chaves e os valores são concatenados. Quando a mensagem está sendo 
-      decodificada, o analisador precisa ser capaz de pular os campos que não reconhece. Desta forma, novos campos 
-      podem ser adicionados a uma mensagem sem quebrar programas antigos que não os conhecem. Para esse fim, a "chave" 
-      para cada par em uma mensagem em formato de ligação é, na verdade, dois valores - o identificador do campo no 
-      schema, mais um tipo de ligação que fornece informações suficientes para encontrar o comprimento do valor 
-      a seguir.
+   FIELD {1 byte} 
+      It is the definition of the schema field key
+      When a message is encoded, the keys and values are concatenated. When the message is being decoded, the analyzer 
+      must be able to skip fields that it does not recognize. In this way, new fields can be added to a message 
+      without breaking features reached by those who do not know them.
 
       1 1 1 1 1 1 1 1
       |   | | |     |
-      |   | | +-----+--- 4 bits  para identificar o campo, portanto, um schema pode ter no máximo 16 campos ((2^4)-1)
+      |   | | +-----+--- 4 bits  The field id, therefore, a schema can have a maximum of 16 ((2^4)-1) fields (0 to 15) 
       |   | |            
-      |   | +----------- 1 bit   IS ARRAY flag que determina se é array
-      |   |                         Exceção FIELD_TYPE_BITMASK_BOOL, que usa esse bit para guardar o valor
+      |   | +----------- 1 bit   IS_ARRAY flag that determines whether the item is an array
+      |   |                         Exception FIELD_TYPE_BITMASK_BOOL, which uses this bit to store the value
       |   |
-      +---+------------- 3 bits  determina o FIELD_TYPE
+      +---+------------- 3 bits  determines the FIELD_TYPE
 
          FIELD_TYPE
             |     mask    |    type    |       constant                |
@@ -248,8 +249,8 @@ end
             | 1 1 0 00000 | ref        | FIELD_TYPE_BITMASK_SCHEMA     |
             | 1 1 1 00000 | ref end    | FIELD_TYPE_BITMASK_SCHEMA_END |
 
-   @header     {object} Referencia para o cabeçalho da serialização atual
-   @fieldId    {int4}   O id do field sendo serializado
+   @header     {Object} Referencia para o cabeçalho da serialização atual
+   @fieldId    {int4}   O Id do field sendo serializado
    @fieldType  {int3}   Ver as constantes FIELD_TYPE_MASK_*
    @isArray    {bool}   É um array de itens sendo serializado?
 
@@ -271,9 +272,9 @@ local function encode_field(header, fieldId, fieldType, isArray)
 end
 
 --[[
-   Ver encode_field
+   See `encode_field(header, fieldId, fieldType, isArray)`
 
-   @byte {int8} O byte gerado no encode_field
+   @byte {byte} The byte generated by the function `encode_field (header, fieldId, fieldType, isArray)`
 ]]
 local function decode_field_byte(byte)
    return {
@@ -283,23 +284,23 @@ local function decode_field_byte(byte)
    }
 end
 
-local Module = {}
-Module.get_field_type_name              = get_field_type_name
-Module.header_increment                 = header_increment
-Module.header_flush                     = header_flush
-Module.encode_byte                      = encode_byte
-Module.decode_char                      = decode_char
-Module.encode_field                     = encode_field
-Module.decode_field_byte                = decode_field_byte
-Module.FIELD_TYPE_BITMASK_BOOL          = FIELD_TYPE_BITMASK_BOOL
-Module.FIELD_TYPE_BITMASK_BOOL_ARRAY    = FIELD_TYPE_BITMASK_BOOL_ARRAY
-Module.FIELD_TYPE_BITMASK_INT32         = FIELD_TYPE_BITMASK_INT32
-Module.FIELD_TYPE_BITMASK_INT53         = FIELD_TYPE_BITMASK_INT53
-Module.FIELD_TYPE_BITMASK_DOUBLE        = FIELD_TYPE_BITMASK_DOUBLE
-Module.FIELD_TYPE_BITMASK_STRING        = FIELD_TYPE_BITMASK_STRING
-Module.FIELD_TYPE_BITMASK_SCHEMA        = FIELD_TYPE_BITMASK_SCHEMA
-Module.FIELD_TYPE_BITMASK_SCHEMA_END    = FIELD_TYPE_BITMASK_SCHEMA_END
-Module.HEADER_EMPTY_BYTE                = HEADER_EMPTY_BYTE
-Module.HEADER_BITMASK_INDEX             = HEADER_BITMASK_INDEX
-Module.HEADER_END_MARK                  = HEADER_END_MARK
-return Module
+local Core = {}
+Core.get_field_type_name              = get_field_type_name
+Core.header_increment                 = header_increment
+Core.header_flush                     = header_flush
+Core.encode_byte                      = encode_byte
+Core.decode_char                      = decode_char
+Core.encode_field                     = encode_field
+Core.decode_field_byte                = decode_field_byte
+Core.FIELD_TYPE_BITMASK_BOOL          = FIELD_TYPE_BITMASK_BOOL
+Core.FIELD_TYPE_BITMASK_BOOL_ARRAY    = FIELD_TYPE_BITMASK_BOOL_ARRAY
+Core.FIELD_TYPE_BITMASK_INT32         = FIELD_TYPE_BITMASK_INT32
+Core.FIELD_TYPE_BITMASK_INT53         = FIELD_TYPE_BITMASK_INT53
+Core.FIELD_TYPE_BITMASK_DOUBLE        = FIELD_TYPE_BITMASK_DOUBLE
+Core.FIELD_TYPE_BITMASK_STRING        = FIELD_TYPE_BITMASK_STRING
+Core.FIELD_TYPE_BITMASK_SCHEMA        = FIELD_TYPE_BITMASK_SCHEMA
+Core.FIELD_TYPE_BITMASK_SCHEMA_END    = FIELD_TYPE_BITMASK_SCHEMA_END
+Core.HEADER_EMPTY_BYTE                = HEADER_EMPTY_BYTE
+Core.HEADER_BITMASK_INDEX             = HEADER_BITMASK_INDEX
+Core.HEADER_END_MARK                  = HEADER_END_MARK
+return Core

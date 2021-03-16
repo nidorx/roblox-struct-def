@@ -8,7 +8,7 @@
 
    https://github.com/nidorx/roblox-struct-def
 
-   Discussions about this script are at https://devforum.roblox.com/t/ID_FORUM
+   Discussions about this script are at https://devforum.roblox.com/t/1112973
 
    ------------------------------------------------------------------------------
 
@@ -57,8 +57,8 @@ local HEADER_BITMASK_INDEX             = Core.HEADER_BITMASK_INDEX
 local HEADER_END_MARK                  = Core.HEADER_END_MARK
 
 local Bool = require(game.ReplicatedStorage:WaitForChild('Lib'):WaitForChild('Bool'))
-local encode_field_bool       = Bool.encode_field_bool
-local encode_field_bool_array = Bool.encode_field_bool_array
+local encode_bool             = Bool.encode_bool
+local encode_bool_array       = Bool.encode_bool_array
 local decode_bool_array_byte  = Bool.decode_bool_array_byte
 
 local Int32 = require(game.ReplicatedStorage:WaitForChild('Lib'):WaitForChild('Int32'))
@@ -89,24 +89,24 @@ local encode_string_array              = String.encode_string_array
 
 local Converters = require(game.ReplicatedStorage:WaitForChild('Lib'):WaitForChild('Converters'))
 
--- todos os schemas registrados
+-- all registered schemas
 local SCHEMA_BY_ID = {}
 
 local serialize
 
 --[[
-   Faz o ecode de um field do tipo schema, no seguinte formato <{FIELD_REF}{SCHEMA_ID}[{VALUE}]{FIELD_REF_END}>
+   Encodes a field of type schema, in the following format <{FIELD_REF}{SCHEMA_ID}[{VALUE}]{SCHEMA_END}>
 
-   Onde:
+   Where:
 
-   FIELD_REF      = FIELD_TYPE_BITMASK_SCHEMA, com IS_ARRAY=false
+   FIELD_REF      = FIELD_TYPE_BITMASK_SCHEMA, with IS_ARRAY=false
    SCHEMA_ID      = byte
-   [{VALUE}]      = Conteúdo do shema serializado
-   FIELD_REF_END  = FIELD_TYPE_BITMASK_SCHEMA_END, marca o fim desse objeto
+   [{VALUE}]      = Serialized shema content
+   SCHEMA_END     = FIELD_TYPE_BITMASK_SCHEMA_END, marks the end of this object
 
-   @header  {Object} Referencia para o header
-   @field   {Object} A referencia para o campo
-   @value   {Object} O objeto que será serializado
+   @header  {Object} Header reference
+   @field   {Object} The reference for the field
+   @value   {Object} The object that will be serialized
 ]]
 local function encode_schema(header, field, value)
    if value == nil or field.Schema == nil then 
@@ -120,19 +120,19 @@ local function encode_schema(header, field, value)
 end
 
 --[[
-   Faz o ecode de um field do tipo array de schema, no seguinte formato <{FIELD_REF}{SCHEMA_ID}[<[{VALUE}]{FIELD_REF_END}>]>
+   Encodes a schema array type field, in the following format <{FIELD_REF}{SCHEMA_ID}[<[{VALUE}]{SCHEMA_END}>]>
 
-   Onde:
+   Where:
 
-   FIELD_REF                     = FIELD_TYPE_BITMASK_SCHEMA, com IS_ARRAY=true
+   FIELD_REF                     = FIELD_TYPE_BITMASK_SCHEMA, with IS_ARRAY=true
    SCHEMA_ID                     = byte
-   [<[{VALUE}]{FIELD_REF_END}>]  = Array de conteúdo de cada schema sendo serializado
-                                    FIELD_REF_END  = FIELD_TYPE_BITMASK_SCHEMA_END, marca o fim de um item, usa o 
-                                    byte IS_ARRAY para indicar se possui mais registros na sequencia
+   [<[{VALUE}]{SCHEMA_END}>]     = Content array of each schema being serialized
+                                    SCHEMA_END  = FIELD_TYPE_BITMASK_SCHEMA_END, marks the end of an item, uses the 
+                                    IS_ARRAY bit to indicate whether it has more records in the sequence
 
-   @header  {Object} Referencia para o header
-   @field   {Object} A referencia para o campo
-   @value   {Object} O objeto que será serializado
+   @header  {Object}    Header reference
+   @field   {Object}    The reference for the field
+   @values  {Object[]}  The objects that will be serialized
 ]]
 local function encode_schema_array(header, field, values)
    local schema = field.Schema
@@ -154,63 +154,34 @@ local function encode_schema_array(header, field, values)
 end
 
 --[[
-   Utilitário para setar o valor de um campo de um objeto durante a deserialização
-]]
-local function set_object_value(objectCurrent, value, schema, fieldDecoded)
-   if schema ~= nil then 
-      local field = schema.FieldsById[fieldDecoded.Id]
-      if field ~= nil then
-         if field.Type == fieldDecoded.Type and field.IsArray == fieldDecoded.IsArray then
-            
-            if field.ConvertToInstance ~= nil then
-               value = field.ConvertToInstance(schema, field, value)
-            end
+   Serializes a data
 
-            objectCurrent[field.Name] = value
-         else
-            print(table.concat({
-               'WARNING: Deserialize - O tipo do campo é diferente do valor serializado (',
-               'SCHEMA_ID=', schema.Id, ', ',
-               'FIELD_ID=', field.Id, ', ',
-               'FIELD_NAME=', field.Name, ', ',
-               'FIELD_TYPE=', get_field_type_name(field.Type, field.IsArray), ', ',
-               'CONTENT_FIELD_TYPE=', get_field_type_name(fieldDecoded.Type, fieldDecoded.IsArray),
-               ')'
-            }, ''))
-         end
-      end
-   end
-end
-
---[[
-   Faz a serialização de um registro
-
-   Uma mensagem serializada tem a seguinte estrutura {HEADER}{SCHEMA_ID}[<{FIELD}[<{EXTRA}?[{VALUE}]?>]>], Onde:
-
+   A serialized message has the following structure 
+      {HEADER}{SCHEMA_ID}[<{FIELD}[<{EXTRA}?[{VALUE}]?>]>]
+      
+   Where:
    
    HEADER {bit variable} 
-      O header abriga a informação sobre o deslocamento dos bytes serializados. O deslocamento é necessário para que 
-      os bytes encodados permaneçam no range dos 92 caracteres usados  
+      The header contains information about the displacement of the serialized bytes. The offset is necessary so that 
+      the encoded bytes remain in the range of the 92 characters used. See `encode_byte(header, byte)`
 
-   SCHEMA_ID {8 bits}   
-      É o id do esquema da mensagem, o sistema permite a criação de até 255 esquemas distintos
+   SCHEMA_ID {1 byte}   
+      It is the message schema id, the system allows the creation of up to 255 (0 to 254) different schemes
    
-   FIELD {8 bits} 
-      É a definição da chave do campo do esquema
-      Quando uma mensagem é codificada, as chaves e os valores são concatenados. Quando a mensagem está sendo 
-      decodificada, o analisador precisa ser capaz de pular os campos que não reconhece. Desta forma, novos campos 
-      podem ser adicionados a uma mensagem sem quebrar programas antigos que não os conhecem. Para esse fim, a "chave" 
-      para cada par em uma mensagem em formato de ligação é, na verdade, dois valores - o identificador do campo no 
-      schema, mais um tipo de ligação que fornece informações suficientes para encontrar o comprimento do valor a seguir.
+   FIELD {1 byte} 
+      It is the definition of the schema field key
+      When a message is encoded, the keys and values are concatenated. When the message is being decoded, the analyzer 
+      must be able to skip fields that it does not recognize. In this way, new fields can be added to a message 
+      without breaking features reached by those who do not know them.
 
       1 1 1 1 1 1 1 1
       |   | | |     |
-      |   | | +-----+--- 4 bits  para identificar o campo, portanto, um schema pode ter no máximo 16 campos (2^4)
+      |   | | +-----+--- 4 bits  The field id, therefore, a schema can have a maximum of 16 ((2^4)-1) fields (0 to 15) 
       |   | |            
-      |   | +----------- 1 bit   IS ARRAY flag que determina se é array
-      |   |                         Exceção FIELD_TYPE_BITMASK_BOOL, que usa esse bit para guardar o valor
+      |   | +----------- 1 bit   IS_ARRAY flag that determines whether the item is an array
+      |   |                         Exception FIELD_TYPE_BITMASK_BOOL, which uses this bit to store the value
       |   |
-      +---+------------- 3 bits  determina o FIELD_TYPE
+      +---+------------- 3 bits  determines the FIELD_TYPE
 
          FIELD_TYPE
             |     mask    |    type    |       constant                |
@@ -224,54 +195,33 @@ end
             | 1 1 0 00000 | ref        | FIELD_TYPE_BITMASK_SCHEMA     |
             | 1 1 1 00000 | ref end    | FIELD_TYPE_BITMASK_SCHEMA_END |
 
-   <{EXTRA}?[{VALUE}]?> - EXTRA {8 bits}, VALUE {bit variable}
-      Definições adicionais à respeito do conteúdo, depende da informação contida na FIELD
+   <{EXTRA}?[{VALUE}]?>
+      EXTRA {1 byte}
+      VALUE {bit variable}
 
-      - bool
-         Não se aplica, valor já é salvo junto com FIELD
-
-      - bool[]
-         Não possui {EXTRA}
-         Encoda o array de booleanos no [{VALUE}] (ver `encode_field_bool_array(header, fieldId, value)`)
-
-      - int32
-         Formato <{EXTRA}[{VALUE}]?>, ver `encode_int32(header, fieldId, value)`
-
-      - int32[]
-         Repete a estrutura <{EXTRA}[{VALUE}]> até que o LSB do EXTRA seja 0, ver `encode_int32_array(header, fieldId, value)`
-
-      - int32
-         Formato <{EXTRA}[{VALUE}]?>, ver `encode_int53(header, fieldId, value)`
-
-      - ref
-         Possui a seguinte estrutura <{FIELD_REF}{SCHEMA_ID}[{VALUE}]{FIELD_REF_END}>, ver `encode_field_schema(header, field, value)`
-      
-      - ref[]
-         Possui a seguinte estrutura <{FIELD_REF}{SCHEMA_ID}[<[{VALUE}]{FIELD_REF_END}>]>, ver `encode_field_schema_array(header, field, value)`
-
-         
+      Additional definitions regarding the content, depends on the information contained in the FIELD
 
    VALUE {bit variable} 
-      É o próprio conteúdo
+      It is the serialized content itself
 
 
-   @data    {object} Os dados que serão serialzizados
-   @schema  {Schema} Referencia para o schema
-   @hasMore {bool}   O marcador de final de schema FIELD_TYPE_BITMASK_SCHEMA_END usa o IS_ARRAY para informar se existe 
-                        outro objeto serializado na sequencia, usado quando é um array de Schema
+   @data    {Object} The data that will be serialized
+   @schema  {Schema} Reference to the schema
+   @hasMore {bool}   The schema end marker FIELD_TYPE_BITMASK_SCHEMA_END uses IS_ARRAY to tell if there is another 
+                        serialized object in the sequence, used when it is a Schema array
 
    @return string
 ]]
 serialize = function(data, schema, hasMore)
    if data == nil then 
-      print('[WARNING] Schema:Serialize - Recebeu nil como entrada, ignorando serialização (Name='..schema.Name..')')
+      print('[WARNING] Schema:Serialize - Received nil as input, skipping serialization (Name='..schema.Name..')')
       return ''
    end
 
    local header = { index = 1, byte = HEADER_EMPTY_BYTE, content = {}}
    
    local out = {
-      '',                             -- {HEADER} (substituido no final da execução)
+      '',                             -- {HEADER} (replaced at the end of the run)
       encode_byte(header, schema.Id)  -- {SCHEMA_ID}
    }
 
@@ -294,11 +244,11 @@ serialize = function(data, schema, hasMore)
       end
    end
 
-   -- usa IS_ARRAY para informar se possui mais itens
+   -- uses IS_ARRAY to tell you if you have more items
    out[#out + 1] = encode_field(header, 0, FIELD_TYPE_BITMASK_SCHEMA_END, hasMore)
 
-   if #out == 2 then
-      -- data is empty (only {HEADER} and {SCHEMA_ID})
+   if #out == 3 then
+      -- data is empty (only {HEADER}, {SCHEMA_ID} and {SCHEMA_END})
       return ''
    end
 
@@ -308,42 +258,77 @@ serialize = function(data, schema, hasMore)
 end
 
 --[[
-   Faz a De-serialização de um conteúdo.
+   Utility to set the value of an object field during deserialization
+]]
+local function set_object_value(object, value, schema, fieldDecoded)
+   if schema ~= nil then 
+      local field = schema.FieldsById[fieldDecoded.Id]
+      if field ~= nil then
+         if field.Type == fieldDecoded.Type and field.IsArray == fieldDecoded.IsArray then
+            
+            if field.ConvertToInstance ~= nil then
+               value = field.ConvertToInstance(schema, field, value)
+            end
 
-   É permitido que existam vários registros serializados concatenados no conteúdo, o sistema por padrão irá retonar 
-   apenas o primeiro registro.
+            object[field.Name] = value
+         else
+            print(table.concat({
+               '[WARNING] StructDef:Deserialize - The type of the field is different from the serialized value (',
+               'SCHEMA_ID=', schema.Id, ', ',
+               'FIELD_ID=', field.Id, ', ',
+               'FIELD_NAME=', field.Name, ', ',
+               'FIELD_TYPE=', get_field_type_name(field.Type, field.IsArray), ', ',
+               'CONTENT_FIELD_TYPE=', get_field_type_name(fieldDecoded.Type, fieldDecoded.IsArray),
+               ')'
+            }, ''))
+         end
+      end
+   end
+end
+
+--[[
+   De-serializes a content.
+
+   It is allowed that there are several serialized records concatenated in the content, the system by default will 
+   return only the first record.
    
-   Se desejar que seja retornado um array com todos os registros existentes, basta informar `true` o parametro `all`,
-   desse modo o método sempre retornará um array
+   If you want an array with all existing records to be returned, just enter `true` in the` all` parameter, so the 
+   method will always return an array
 
-   @content    {string}    Conteúdo serializado
-   @all        {bool}      Permite retornar todos os registros que estão concatenados neste conteúdo 
+   @content {string} Serialized content
+   @all     {bool}   Allows you to return all records that are concatenated in this content
 
-   @return {Object|Array<Object>} se `all` = `true` retorna array com todos os registros concatenados no conteúdo
+   @return {Object|Array<Object>} if `all` = `true` returns array with all records concatenated in the content
 ]]
 local function deserialize(content, all)
 
-   local header            = { shift = {}, index = 1} -- os dados do cabeçalho que foi deserializado
-   local fieldDecoded      = nil    -- dados brutos do field, obtido da função `decode_field(header, char)`
-   local inHeader          = true   -- está processando o header?
-   local inHeaderBit2      = false  -- o header identifica o shift de um byte, ver a função `encode_byte`
-   local schemaId          = nil    -- O id do schema sendo processado, logo após o {HEADER}
-   local schema            = nil    -- A referencia para o Schema sendo processado
-   local inExtraByte       = false  -- está processando o extra
-   local extraByteDecoded  = nil  -- dados do extra-field processado
-   local isCaptureBytes    = false  -- está capturando bytes
-   local captureCount      = 0      -- quantos itens seguintes é para guardar
-   local capturedBytes     = {}     -- os bytes capturados
-   local isCaptureChars    = false  -- está capturando chars UTF-8
-   local capturedChars     = {}     -- os chars capturados
-   local stringCount       = 0 
-   local stringValue       = nil
-   local value             = nil    -- a referencia para o valor do campo atual
-   local object            = {}    -- gerenciamento da estrutura do objeto
-   
-   local stack = {}
-   
-   local i                 = 0      -- auxiliar, apenas para identificar a posição caso exista inconsistencia
+   -- the header data that has been deserialized
+   local header            = { 
+      shift = {}, 
+      index = 1
+   } 
+   local fieldDecoded      = nil    -- raw field data, obtained from the function `decode_field(header, char)`
+   local inHeader          = true   -- is processing the header?
+   local inHeaderBit2      = false  -- the header identifies the shift of a byte, see the function `encode_byte`
+   local schemaId          = nil    -- The schema id being processed, right after {HEADER}
+   local schema            = nil    -- The reference to the Schema being processed
+   local inExtraByte       = false  -- is processing EXTRA
+   local extraByteDecoded  = nil    -- EXTRA data processed
+   local isCaptureBytes    = false  -- is capturing bytes
+   local capturedBytes     = {}     -- the captured bytes
+   local isCaptureChars    = false  -- is capturing UTF-8 chars
+   local capturedChars     = {}     -- the captured chars
+   local captureCount      = 0      -- how many items is next to capture
+   local value             = nil    -- the reference to the current field value
+   local object            = {}     -- the reference to the current object
+   local stack             = {}     -- the path to the nested objects
+   local i                 = 0      -- auxiliary, just to identify the position if there is inconsistency
+
+
+   local allObjects = {}
+
+  
+
    for char in content:gmatch(utf8.charpattern) do
       i = i+1
 
@@ -400,14 +385,14 @@ local function deserialize(content, all)
          schemaId = decode_char(header, char)
          schema   = SCHEMA_BY_ID[schemaId]
 
-         -- verifica se o schema está registrado
+         -- checks if the schema is registered
          if schema == nil and all ~= true then 
-            print('[WARNING] Deserialize - O conteúdo faz referência para um schema não cadastrado (SCHEMA_ID='..schemaId..')')
+            print('[WARNING] StructDef:Deserialize - Content references to an unregistered schema (SCHEMA_ID='..schemaId..')')
             return nil
          end
 
       ------------------------------------------------------------------------------------------------------------------
-      -- EXTRA_BYTE
+      -- EXTRA
       ------------------------------------------------------------------------------------------------------------------
       elseif inExtraByte then
 
@@ -415,7 +400,7 @@ local function deserialize(content, all)
          local extraByte = decode_char(header, char)
 
          ---------------------------------------------------------------------------------------------------------------
-         -- int32 [EXTRA_BYTE]
+         -- int32 [EXTRA]
          ---------------------------------------------------------------------------------------------------------------
          if fieldDecoded.Type == FIELD_TYPE_BITMASK_INT32 then
 
@@ -433,7 +418,7 @@ local function deserialize(content, all)
             else 
                extraByteDecoded = decode_int32_extra_byte(extraByte)
                if extraByteDecoded.ValueFits then
-                  -- Inteiro menor que 64, coube no EXTRA_BYTE 
+                  -- Integer less than 64, fit in EXTRA
                   set_object_value(object, extraByteDecoded.Value, schema, fieldDecoded)
                   value             = nil
                   extraByteDecoded  = nil
@@ -446,7 +431,7 @@ local function deserialize(content, all)
             end 
 
          ---------------------------------------------------------------------------------------------------------------
-         -- int53 [EXTRA_BYTE]
+         -- int53 [EXTRA]
          ---------------------------------------------------------------------------------------------------------------
          elseif fieldDecoded.Type == FIELD_TYPE_BITMASK_INT53 then
 
@@ -469,7 +454,7 @@ local function deserialize(content, all)
             end
 
          ---------------------------------------------------------------------------------------------------------------
-         -- double [EXTRA_BYTE]
+         -- double [EXTRA]
          ---------------------------------------------------------------------------------------------------------------
          elseif fieldDecoded.Type == FIELD_TYPE_BITMASK_DOUBLE then
 
@@ -496,14 +481,14 @@ local function deserialize(content, all)
             end
 
          ---------------------------------------------------------------------------------------------------------------
-         -- string [EXTRA_BYTE]
+         -- string [EXTRA]
          ---------------------------------------------------------------------------------------------------------------
          elseif fieldDecoded.Type == FIELD_TYPE_BITMASK_STRING then
             if fieldDecoded.IsArray and fieldDecoded.Count == nil then
-               -- O primeiro EXTRA é a quantidade de itens, ver `encode_string_array(header, field, values)`
+               -- The first EXTRA is the number of items, see `encode_string_array(header, field, values)`
                fieldDecoded.Count = extraByte
                value = {}
-               -- próximo byte é um extra também
+               -- next byte is an EXTRA too
                inExtraByte = true
             else
                if extraByteDecoded == nil then 
@@ -556,10 +541,10 @@ local function deserialize(content, all)
                   if extraByteDecoded.Items[extraByteDecoded.Index].HasMore then
                      extraByteDecoded.Index  = extraByteDecoded.Index + 1
                      if extraByteDecoded.Index > 2 then 
-                        -- somente 2 int32 por extra
+                        -- only 2 int32 per extra
                         inExtraByte = true
                      else
-                        -- captura bytes do proximo int32 na sequencia
+                        -- captures bytes of the next int32 in the sequence
                         isCaptureBytes    = true
                         capturedBytes     = {}
                         captureCount = extraByteDecoded.Items[2].Bytes
@@ -642,7 +627,7 @@ local function deserialize(content, all)
                   capturedBytes  = {}
                   captureCount   = 1
                else 
-                  -- bool array não possui mais dados
+                  -- bool array has no more data
                   set_object_value(object, value, schema, fieldDecoded)
                   value             = nil
                   fieldDecoded      = nil
@@ -691,23 +676,22 @@ local function deserialize(content, all)
          inExtraByte = true
 
          if fieldDecoded.Type == FIELD_TYPE_BITMASK_BOOL then
-            -- o tipo bool salva o valor no mesmo byte do field
+            -- the bool type saves the value in the same byte as the field
             value = fieldDecoded.IsArray
             fieldDecoded.IsArray = false
             set_object_value(object, value, schema, fieldDecoded)            
             value       = nil 
-            inExtraByte = false  -- não possui extra byte
+            inExtraByte = false  -- has no extra byte
             
-
          elseif fieldDecoded.Type == FIELD_TYPE_BITMASK_BOOL_ARRAY then
             value          = {}
             isCaptureBytes = true
             capturedBytes  = {}
             captureCount   = 1
-            inExtraByte = false  -- não possui extra byte
+            inExtraByte = false  -- has no extra byte
 
          elseif fieldDecoded.Type == FIELD_TYPE_BITMASK_SCHEMA then
-            inExtraByte = false  -- não possui extra byte
+            inExtraByte = false  -- has no extra byte
 
             if fieldDecoded.IsArray then 
                value = {}
@@ -715,7 +699,7 @@ local function deserialize(content, all)
                value = nil
             end
 
-            -- salva o estado atual
+            -- save the current state
             local entry = {}
             entry.header            = header
             entry.fieldDecoded      = fieldDecoded
@@ -728,15 +712,13 @@ local function deserialize(content, all)
             entry.isCaptureBytes    = isCaptureBytes
             entry.captureCount = captureCount
             entry.capturedBytes     = capturedBytes
-            entry.stringCount       = stringCount
-            entry.stringValue       = stringValue
             entry.value             = value
             entry.object            = object
             entry.isCaptureChars    = isCaptureChars
             entry.capturedChars     = capturedChars
             table.insert(stack, entry)
 
-            -- faz o reset das variáveis
+            -- reset the variables
             header            = { shift = {}, index = 1}
             fieldDecoded      = nil
             inHeader          = true
@@ -748,19 +730,17 @@ local function deserialize(content, all)
             isCaptureBytes    = false
             captureCount = 0
             capturedBytes     = {}
-            stringCount       = 0
-            stringValue       = nil
             value             = nil 
             object            = {}
             isCaptureChars    = false
             capturedChars     = {}
 
          elseif fieldDecoded.Type == FIELD_TYPE_BITMASK_SCHEMA_END then
-            inExtraByte = false  -- não possui extra byte
+            inExtraByte = false  -- has no extra byte
 
             -- default values
             if schema ~= nil then
-               -- força valores padrão de cada campo do esquema
+               -- forces default values for each field in the schema
                for _, field in ipairs(schema.Fields) do
                   local name = field.Name
                   if object[name] == nil then
@@ -771,13 +751,19 @@ local function deserialize(content, all)
 
             local parent = stack[#stack]
 
-            if parent ~= nil then
+            if parent == nil then
+               if all == true then 
+                  table.insert(allObjects, object)
+               else
+                  return object
+               end
+            else
                if parent.fieldDecoded.IsArray then
                   table.insert(parent.value, object)
    
                   local hasMore = fieldDecoded.IsArray
                   if hasMore then
-                     -- faz o reset das variáveis
+                     -- reset the variables
                      header            = { shift = {}, index = 1}
                      fieldDecoded      = nil
                      inHeader          = true
@@ -789,14 +775,12 @@ local function deserialize(content, all)
                      isCaptureBytes    = false
                      captureCount      = 0
                      capturedBytes     = {}
-                     stringCount       = 0
-                     stringValue       = nil
                      value             = nil 
                      object            = {}
                      isCaptureChars    = false
                      capturedChars     = {}
                   else 
-                     -- faz o reset das variáveis do parent
+                     -- resets the parent variables
                      header            = parent.header
                      fieldDecoded      = parent.fieldDecoded
                      inHeader          = parent.inHeader
@@ -808,8 +792,6 @@ local function deserialize(content, all)
                      isCaptureBytes    = parent.isCaptureBytes
                      captureCount      = parent.captureCount
                      capturedBytes     = parent.capturedBytes
-                     stringCount       = parent.stringCount
-                     stringValue       = parent.stringValue
                      value             = parent.value
                      object            = parent.object
                      isCaptureChars    = parent.isCaptureChars
@@ -823,7 +805,7 @@ local function deserialize(content, all)
                   table.remove(stack, #stack)
                   set_object_value(parent.object, object, parent.schema, parent.fieldDecoded)
 
-                  -- faz o reset das variáveis
+                  -- reset the variables
                   header            = parent.header
                   fieldDecoded      = parent.fieldDecoded
                   inHeader          = parent.inHeader
@@ -835,8 +817,6 @@ local function deserialize(content, all)
                   isCaptureBytes    = parent.isCaptureBytes
                   captureCount      = parent.captureCount
                   capturedBytes     = parent.capturedBytes
-                  stringCount       = parent.stringCount
-                  stringValue       = parent.stringValue
                   value             = parent.value
                   object            = parent.object
                   isCaptureChars    = parent.isCaptureChars
@@ -845,6 +825,10 @@ local function deserialize(content, all)
             end
          end
       end
+   end
+
+   if all == true then 
+      return allObjects
    end
 
    return object
@@ -857,7 +841,7 @@ local function parse_primitive_field(fieldType, field, options)
 
    local defaultValue   = options.Default
    local maxLength      = options.MaxLength
-
+   
    if fieldType == 'int32' then 
       field.EncodeFn = encode_int32
       field.Type     = FIELD_TYPE_BITMASK_INT32
@@ -904,7 +888,7 @@ local function parse_primitive_field(fieldType, field, options)
       end
 
    elseif fieldType == 'bool' then
-      field.EncodeFn = encode_field_bool
+      field.EncodeFn = encode_bool
       field.Type     = FIELD_TYPE_BITMASK_BOOL
       if defaultValue == nil then 
          defaultValue  = false
@@ -912,7 +896,7 @@ local function parse_primitive_field(fieldType, field, options)
 
    elseif fieldType == 'bool[]' then
       field.IsArray  = true
-      field.EncodeFn = encode_field_bool_array
+      field.EncodeFn = encode_bool_array
       field.Type     = FIELD_TYPE_BITMASK_BOOL_ARRAY
       if defaultValue == nil then 
          defaultValue  = {}
@@ -961,32 +945,30 @@ function Schema:Field(id, name, fieldType, options)
    if options == nil then
       options = {}
    end
-
-   -- param1, param2, convertToSerialize, convertToInstance
    
-   if id == nil or type(id) ~= 'number' or math.floor(id) ~= id or id < 0 or id > 16 then
-      error('O Id do campo deve ser um número inteiro entre 0 e 16')
+   if id == nil or type(id) ~= 'number' or math.floor(id) ~= id or id < 0 or id > 15 then
+      error('Field Id must be an integer between 0 and 15')
    end
       
    if name == nil or  type(name) ~= 'string' or name == '' then
-      error('O Nome do campo deve ser uma string válida')
+      error('Field Name must be a valid string')
    end
 
    if fieldType == nil then 
-      error('O Tipoo de dado do campo é requerido')
+      error('Field data type is required')
    end
 
    for _, field in ipairs(self.Fields) do
       if field.Name == name then 
-         error('Já existe um campo registrado com o mesmo nome '..name)
+         error('A registered field with the same name already exists '..name)
       end
 
       if field.Id == id then 
-         error('Já existe um campo registrado com o mesmo id '..id)
+         error('There is already a registered field with the same id '..id)
       end
    end
 
-   local field = {}
+   local field    = {}
    field.Id       = id
    field.Name     = name
    field.IsArray  = false
@@ -1009,7 +991,7 @@ function Schema:Field(id, name, fieldType, options)
       -- Verifica se é referencia para Vector3 ou outras classes padrões do Roblox
       local converter = Converters[fieldType]
       if converter == nil then
-         error('O Tipoo de dado do campo é inválido')
+         error('Field data type is invalid')
       end
       
       if options.IsArray then 
@@ -1039,55 +1021,28 @@ function Schema:Field(id, name, fieldType, options)
    return self
 end
 
---[[
-   Permite definir uma função que será usada para transformar o objeto bruto em um objeto serializável
-]]
-function Schema:Encoder(func)
-   if type(func) ~= 'function' then
-      error('O método Encoder uma função como parametro de entrada')
-   end
-   self.EncoderFn = func
-
-  return self
-end
-
---[[
-   Permite definir uma função que será usada para transformar um objeto em sua instancia final
-]]
-function Schema:Decoder(func)
-   if type(func) ~= 'function' then
-      error('O método Decoder uma função como parametro de entrada')
-   end
-   self.DecoderFn = func
-
-   return self
-end
-
-
 function Schema:Serialize(data)
    return serialize(data, self, false)
 end
 
 --[[
-   Registra um novo schema
+   Register a new schema
 
    Params
-      id       {int8}   o identificador do schema
-      fields   {Field}  Os campos
+      id       {byte|Object}   The schema identifier or configuration
 ]]
 local function CreateSchema(id)
 
    if type(id) == 'number' then
       if id < 0  or id > 254 then
-         error('O id do eschema deve ser >= 0 e <= 254')
+         error('The schema id must be> = 0 and <= 254')
       end
          
       if SCHEMA_BY_ID[id] ~= nil then
-         print(SCHEMA_BY_ID[id], SCHEMA_BY_ID)
-         error('Já existe um schema registrado com o Id informado')
+         error('There is already a registered schema with the given Id')
       end
    
-      local schema = {}
+      local schema      = {}
       schema.isSchema   = true
       schema.Id         = id
       schema.Fields     = {}
@@ -1101,7 +1056,18 @@ local function CreateSchema(id)
       -- config constructor
       local config = id
       local schema = CreateSchema(config.Id)
-      
+      if config.Fields ~= nil then
+         for name, params in pairs(config.Fields) do 
+            schema:Field(params.Id, name, params.Type, { 
+               Default     = params.Default,
+               MaxLength   = params.MaxLength,
+               ToSerialize = params.ToSerialize,
+               ToInstance  = params.ToInstance
+            })
+         end
+      end
+
+      return schema      
    end
 end
 

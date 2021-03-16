@@ -26,15 +26,15 @@ print(deserialized)
 ## Links
 
 - **Latest stable version**
-    - https://www.roblox.com/library/ID_LIBRARY/StructDef
+    - https://www.roblox.com/library/6525719081/StructDef
 - **Forum**
-    - https://devforum.roblox.com/t/ID_FORUM
+    - https://devforum.roblox.com/t/1112973
 - **Releases**
    - https://github.com/nidorx/roblox-struct-def/releases
     
 ## Installation
 
-You can do the installation directly from Roblox Studio, through the Toolbox search for `StructDef`, this is the minified version of the engine (https://www.roblox.com/library/ID_LIBRARY/StructDef).
+You can do the installation directly from Roblox Studio, through the Toolbox search for `StructDef`, this is the minified version of the engine (https://www.roblox.com/library/6525719081/StructDef).
 
 If you want to work with the original source code (for debugging or working on improvements), access the repository at https://github.com/nidorx/roblox-struct-def
 
@@ -213,7 +213,7 @@ print(MySchema:Serialize(data))
 
 #### string, string[]
 
-o StructDef Saves UTF-8 _AS IS_ text, without encoding
+StructDef saves UTF-8 text _AS IS_, without encoding
 
 ```lua
 local MySchema = StructDef.Schema(1)

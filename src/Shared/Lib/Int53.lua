@@ -205,9 +205,9 @@ end
 --[[
    Faz a decodifiação do EXTRA de um int53, ver `encode_int53(header, fieldId, value)`
 
-   @byteExtra  {int8} O {EXTRA} byte que foi gerado pelo método `encode_int53(header, fieldId, value)`
+   @byteExtra  {byte} O {EXTRA} byte que foi gerado pelo método `encode_int53(header, fieldId, value)`
 
-   @return {object} informações contidas no {EXTRA}
+   @return {Object} informações contidas no {EXTRA}
 ]]
 local function decode_int53_extra_byte(byteExtra)
   
@@ -224,7 +224,7 @@ end
 --[[
    Faz a decodifiação dos bytes que compoem um int53, apenas quando é BIG, ver função `encode_int53(header, fieldId, value)` 
 
-   @bytes      {int8[]} O bytes que foram gerados pelo método `encode_int53(header, fieldId, value)`
+   @bytes      {byte[]} O bytes que foram gerados pelo método `encode_int53(header, fieldId, value)`
    @isNegative {bool}   O valor é negativo (informação está no {EXTRA} byte)
    @timesLen   {number} Quantos bytes faz parte do multiplicador x32
    @restLen    {number} Quantos bytes faz parte do resto

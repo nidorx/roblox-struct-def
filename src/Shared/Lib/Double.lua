@@ -277,9 +277,9 @@ end
 --[[
    Faz a decodifiação do EXTRA de um double, ver `encode_double(header, fieldId, value)`
 
-   @byteExtra  {int8} O {EXTRA} byte que foi gerado pelo método `encode_double(header, fieldId, value)`
+   @byteExtra  {byte} O {EXTRA} byte que foi gerado pelo método `encode_double(header, fieldId, value)`
 
-   @return {object} informações contidas no {EXTRA}
+   @return {Object} informações contidas no {EXTRA}
 ]]
 local function decode_double_extra_byte(byteExtra)
    local extra = {}
@@ -297,7 +297,7 @@ end
    Faz a decodifiação dos bytes que compoem um double, ver função `encode_double(header, fieldId, value)` 
 
    @bytes   {byte[]} O bytes que foram gerados pelo método `encode_double(header, fieldId, value)`
-   @extra   {object} As informações extraidas pelo método `decode_double_extra_byte(byteExtra)`
+   @extra   {Object} As informações extraidas pelo método `decode_double_extra_byte(byteExtra)`
 
    @return {double}
 ]]

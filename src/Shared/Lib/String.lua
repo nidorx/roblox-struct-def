@@ -14,24 +14,20 @@ local STRING_EXTRA_FIT_SIZE            = 127    --  (2^7) -1   [7 bits]
 local STRING_MAX_SIZE                  = 32767  -- (2^15) -1   [15 bits]
 
 --[[
-   Faz o ecode de um field do tipo string, no formato <{EXTRA}[{VALUE}]?>
+   Encodes a string-type field, in <{EXTRA}[{VALUE}]?> format 
 
-   {VALUE} Aceita no máximo 32767 caracteres UTF-8
+   [{VALUE}] Accepts a maximum of 32767 UTF-8 characters
 
    {EXTRA}
       1 1 1 1 1 1 1 1
       | |           |
-      | +-----------+--- 7 bit   Primeira parte da string, caso tamanho seja maior que 127, usa um segundo byte para 
-      |                             abrigar o tamanho da string        
-      +----------------- 1 bit   tamanho da string cabe nos proximos bits (se tamanho <= 127 = ((2^7) -1))
+      | +-----------+--- 7 bit   First part of the string, if length is greater than 127, uses a second byte to 
+      |                             accommodate the length of the string     
+      +----------------- 1 bit   string size fits the next bits (if size <= 127 = ((2 ^ 7) -1))
 
-   [{VALUE}]
-      Até 4 bytes do numero sendo serializado
-      Quando número é <= 63 (2^6)-1 o valor já é serializado no {EXTRA}
-
-   @header     {Object} Referencia para o header
-   @field      {Object} A referencia para o campo
-   @value      {int32}  Valor que será serializado
+   @header     {Object} Header reference
+   @field      {Object} The reference for the field
+   @value      {String} Value that will be serialized
 ]]
 local function encode_string(header, field, value)
    if value == nil or type(value) ~= 'string' then
@@ -73,9 +69,9 @@ local function encode_string(header, field, value)
 end
 
 --[[
-   Faz o decode do primeiro byte do EXTRA de uma string, ver `encode_string(header, field, value)`
+   Decode the first EXTRA byte of a string, see `encode_string (header, field, value)`
 
-   @byteExtra {byte} Primeiro byte do `encode_string(header, field, value)`
+   @firstByteExtra {byte} First byte of `encode_string (header, field, value)`
 ]]
 local function decode_string_extra_byte_first(firstByteExtra)
    local out = {}
@@ -92,10 +88,10 @@ local function decode_string_extra_byte_first(firstByteExtra)
 end
 
 --[[
-   Faz o decode do segundo byte do EXTRA de uma string, ver `encode_string(header, field, value)`
+   Decode the EXTRA second byte of a string, see `encode_string(header, field, value)`
 
-   @secondByteExtra     {byte} Segundo byte do `encode_string(header, field, value)`
-   @decodedExtraFirst   {byte} Retorno do `decode_string_extra_byte_first(firstByteExtra)`
+   @secondByteExtra     {byte} Second byte of `encode_string(header, field, value)`
+   @decodedExtraFirst   {byte} Return of `decode_string_extra_byte_first(firstByteExtra)`
 ]]
 local function decode_string_extra_byte_second(secondByteExtra, decodedExtraFirst)
    decodedExtraFirst.Size = bor(lshift(decodedExtraFirst.Byte, 8), secondByteExtra)
@@ -104,17 +100,17 @@ end
 
 
 --[[
-   Faz o ecode de um field do tipo string[], no formato {EXTRA}[<{EXTRA}[{VALUE}]?>]
+   Does the ecode of a field of type string [], in the format {EXTRA}[<{EXTRA}[{VALUE}]?>]
 
    {EXTRA}
-      1 byte, informa quantas strings existem no array. Máximo de 255
+      1 byte, tells how many strings are in the array. 255 maximum
 
-   [<{EXTRA}[{VALUE}]?>] ver método `encode_string`
+   [<{EXTRA}[{VALUE}]?>] See `encode_string(header, field, value)`
       
 
-   @header     {Object} Referencia para o header
-   @field      {Object} A referencia para o campo
-   @value      {int32}  Valor que será serializado
+   @header     {Object}    Header reference
+   @field      {Object}    The reference for the field
+   @value      {String[]}  Value that will be serialized
 ]]
 local function encode_string_array(header, field, values)
    if values == nil or table.getn(values) == 0 then
@@ -126,7 +122,7 @@ local function encode_string_array(header, field, values)
 
    local out = {
       encode_field(header, field.Id, FIELD_TYPE_BITMASK_STRING, true),
-      -- primeiro EXTRA é a quantidade de itens que o array possui
+      -- first EXTRA is the number of items that the array has
       encode_byte(header, count)
    }
 
@@ -164,10 +160,10 @@ local function encode_string_array(header, field, values)
 end
 
 
-local Module = {}
-Module.encode_string                   = encode_string
-Module.decode_string_extra_byte_first  = decode_string_extra_byte_first
-Module.decode_string_extra_byte_second = decode_string_extra_byte_second
-Module.encode_string_array             = encode_string_array
-Module.STRING_MAX_SIZE                 = STRING_MAX_SIZE
-return Module
+local String = {}
+String.encode_string                   = encode_string
+String.decode_string_extra_byte_first  = decode_string_extra_byte_first
+String.decode_string_extra_byte_second = decode_string_extra_byte_second
+String.encode_string_array             = encode_string_array
+String.STRING_MAX_SIZE                 = STRING_MAX_SIZE
+return String

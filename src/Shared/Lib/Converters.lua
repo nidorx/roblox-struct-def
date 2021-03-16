@@ -1,5 +1,6 @@
 --[[
-   Os conversores para os tipos padrões do Roblox https://developer.roblox.com/en-us/api-reference/data-types
+   Converters for standard Roblox types 
+   https://developer.roblox.com/en-us/api-reference/data-types
 ]]
 
 local EMPTY_VEC3 = Vector3.new(0, 0, 0)
