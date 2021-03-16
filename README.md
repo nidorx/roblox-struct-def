@@ -1,6 +1,6 @@
 <div align="center">
     <h1>Roblox StructDef</h1>
-    <img src="./repository-open-graph.png" width="350" />
+    <img src="./repository-open-graph.png" />
     <p align="center">
         simplifying the serialization and deserialization of complex objects using a standard language
     </p>    
