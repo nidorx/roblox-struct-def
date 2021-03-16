@@ -120,7 +120,7 @@ Fields = {
 
 
 
-> The `ToSerialize` and` ToInstance` methods allow customization of the data, both to serialize and to instantiate. Internally it is used in [Roblox standard type converters] (https://github.com/nidorx/roblox-struct-def/blob/main/src/Shared/Lib/Converters.lua)
+> The `ToSerialize` and` ToInstance` methods allow customization of the data, both to serialize and to instantiate. Internally it is used in [Roblox standard type converters](https://github.com/nidorx/roblox-struct-def/blob/main/src/Shared/Lib/Converters.lua)
 
 
 ### Assigning Ids
