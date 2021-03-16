@@ -1,4 +1,15 @@
-# Roblox Structure Definition - StructDef
+<div align="center">
+    <h1>Roblox StructDef</h1>
+    <img src="./repository-open-graph.png" width="350" />
+    <p align="center">
+        simplifying the serialization and deserialization of complex objects using a standard language
+    </p>    
+    <p>
+        <a href="https://www.roblox.com/library/6525719081/StructDef">
+            https://www.roblox.com/library/6525719081/StructDef
+        </a>
+    </p>
+</div>
 
 **TLDR;** 
 
