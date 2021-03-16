@@ -10,8 +10,8 @@ local INT_EXTRA_BITMASK_IT_FITS        = 64  -- 01000000
 local INT_EXTRA_BITMASK_VALUE          = 63  -- 00111111
 local INT_EXTRA_BITMASK_BYTE_COUNT     = 12  -- 00001100
 
--- quantos bytes [chars] é usado pelo int32 na sequencia (4 valores)
--- Usado pelo int53 para determinar o multiplicador
+-- how many bytes [chars] is used by int32 in the sequence (4 values)
+-- Used by int53 to determine the multiplier
 local INT_EXTRA_BITMASK_NUM_BYTES = {
    0,    -- 00000000   = 1 byte
    4,    -- 00000100   = 2 bytes
@@ -26,29 +26,26 @@ local INT16_MAX  = 65535               -- (2^16) -1  [2 bytes]
 local INT24_MAX  = 16777215            -- (2^24) -1  [3 bytes]
 local INT32_MAX  = 4294967295          -- (2^32) -1  [4 bytes]
 
--- 9007199254740992
---  281474976710655
 --[[
-   Faz o encode de um int32, no formato <{EXTRA}[{VALUE}]?>
+   Does it encode an int32, in the format <{EXTRA}[{VALUE}]?>
 
    {EXTRA}
       1 1 1 1 1 1 1 1
       | | | | | | | |
-      | | | | | | | |
-      | | | | | | +-+--- 2 bits  descartado caso numero maior que 64
-      | | | | +-+------- 2 bits  quantos bytes [chars] é usado pelo int32 na sequencia (4 valores)
-      | | +-+----------- 2 bits  descartado caso numero maior que 64
-      | +--------------- 1 bit   número cabe nos proximos bits? Se número for <= 63 (2^6) o seu conteúdo já é
-      |                          formado pelos proximos bit. Caso negativo, valida proximos 2 bits
-      +----------------- 1 bit   0 = POSITIVO, 1 = NEGATIVO
+      | | | | | | +-+--- 2 bits  discarded if number greater than 63
+      | | | | +-+------- 2 bits  how many bytes [chars] is used by int32 in the sequence (4 values)
+      | | +-+----------- 2 bits  discarded if number greater than 63
+      | +--------------- 1 bit   number fits in the next bits? If number is <= 63 (2 ^ 6) -1 its content is already 
+      |                             formed by the next bits. If not, validates next 2 bits
+      +----------------- 1 bit   0 = POSITIVE, 1 = NEGATIVE
 
    [{VALUE}]
-      Até 4 bytes do numero sendo serializado
-      Quando número é <= 63 (2^6)-1 o valor já é serializado no {EXTRA}
+      Up to 4 bytes of the number being serialized
+      When number is <= 63 (2 ^ 6) -1 the value is already serialized in EXTRA
 
-   @header     {Object} Referencia para o header
-   @field      {Object} A referencia para o campo
-   @value      {int32}  Valor que será serializado
+   @header     {Object} Header reference
+   @field      {Object} The reference for the field
+   @value      {int32}  Value that will be serialized
 ]]
 local function encode_int32(header, field, value)
 
@@ -57,7 +54,7 @@ local function encode_int32(header, field, value)
       return '' 
    end
 
-   -- faz arredondamento do número, caso recebe double
+   -- rounds the number, if double
    value = math.round(value)
    if value == 0 then
       -- ignore
@@ -73,11 +70,11 @@ local function encode_int32(header, field, value)
       byteExtra = bor(byteExtra, INT_EXTRA_BITMASK_NEGATIVE)
    end
 
-   -- normaliza o número para o limite do int32
+   -- normalizes the number to the limit of int32
    value = math.min(INT32_MAX, math.max(0, math.abs(value)))
 
    if value <= INT6_MAX then
-      -- número cabe nos proximos bits
+      -- number fits in the next bits
 
       byteExtra = bor(byteExtra, value)
       byteExtra = bor(byteExtra, INT_EXTRA_BITMASK_IT_FITS)
@@ -87,7 +84,7 @@ local function encode_int32(header, field, value)
    elseif value <= INT8_MAX then
       -- (2^8) -1  [1 byte] = "11111111"
 
-      -- usa 1 byte 
+      -- 1 byte 
       byteExtra = bor(byteExtra, INT_EXTRA_BITMASK_NUM_BYTES[1])
       out[#out + 1] = encode_byte(header, byteExtra)
 
@@ -97,7 +94,7 @@ local function encode_int32(header, field, value)
    elseif value <= INT16_MAX then
       -- (2^16) -1  [2 bytes] = "11111111 11111111"
 
-      -- usa 2 bytes 
+      -- 2 bytes 
       byteExtra = bor(byteExtra, INT_EXTRA_BITMASK_NUM_BYTES[2])
       out[#out + 1] = encode_byte(header, byteExtra)
 
@@ -108,7 +105,7 @@ local function encode_int32(header, field, value)
    elseif value <= INT24_MAX then
       -- (2^24) -1  [3 bytes] = "11111111 11111111 11111111"
 
-      -- usa 3 bytes 
+      -- 3 bytes 
       byteExtra = bor(byteExtra, INT_EXTRA_BITMASK_NUM_BYTES[3])
       out[#out + 1] = encode_byte(header, byteExtra)
 
@@ -120,7 +117,7 @@ local function encode_int32(header, field, value)
    else
       -- (2^32) -1  [4 bytes] = "11111111 11111111 11111111 11111111"
 
-      -- usa 3 bytes 
+      -- 3 bytes 
       byteExtra = bor(byteExtra, INT_EXTRA_BITMASK_NUM_BYTES[4])
       out[#out + 1] = encode_byte(header, byteExtra)
 
@@ -135,18 +132,18 @@ local function encode_int32(header, field, value)
 end
 
 --[[
-   Faz a decodifiação do EXTRA de um int32, ver `encode_int32(header, fieldId, value)`
+   Decode the EXTRA of an int32, see `encode_int32(header, fieldId, value)`
 
-   @byteExtra  {byte} O {EXTRA} byte que foi gerado pelo método `encode_int32(header, fieldId, value)`
+   @byteExtra  {byte} The EXTRA byte that was generated by the `encode_int32(header, fieldId, value)` method
 
-   @return {Object} informações contidas no {EXTRA}
+   @return {Object} information contained in EXTRA
 ]]
 local function decode_int32_extra_byte(byteExtra)
    local out = {}   
    local isNegative = band(byteExtra, INT_EXTRA_BITMASK_NEGATIVE) ~= 0
 
    if band(byteExtra, INT_EXTRA_BITMASK_IT_FITS) ~= 0 then 
-      -- valor cabe nos 4 últimos bits
+      -- value fits in the last 6 bits
       local value = band(byteExtra, INT_EXTRA_BITMASK_VALUE)
       if isNegative then 
          value = -1 * value
@@ -165,10 +162,10 @@ local function decode_int32_extra_byte(byteExtra)
 end
 
 --[[
-   Faz a decodifiação dos bytes que compoem um int32, ver função `encode_int32(header, fieldId, value)` 
+   Decodes the bytes that make up an int32, see function `encode_int32(header, fieldId, value)`
 
-   @bytes      {byte[]} O bytes que foram gerados pelo método `encode_int32(header, fieldId, value)`
-   @isNegative {bool}   O valor é negativo (informação está no {EXTRA} byte)
+   @bytes      {byte[]} The bytes that were generated by the `encode_int32(header, fieldId, value)` method
+   @isNegative {bool}   The value is negative (information is in the EXTRA byte)
 
    @return {int32}
 
@@ -213,7 +210,7 @@ local INT32_ARRAY_EXTRA_BITMASK_BYTE_COUNT = {
    {12, 2},   -- 00001100
 }
 
--- quantos bytes [chars] é usado pelo int32 na sequencia (4 valores)
+-- how many bytes [chars] is used by int32 in the sequence (4 values)
 local INT32_ARRAY_EXTRA_BITMASK_NUM_BYTES = {
    -- FIRST
    {
@@ -232,27 +229,26 @@ local INT32_ARRAY_EXTRA_BITMASK_NUM_BYTES = {
 }
 
 --[[
-   Faz o encode de um int32[], no formato [<{EXTRA}[{VALUE}]>], repetindo o padrão até que todos os numeros sejam 
-   serializados
+   Encodes an int32 [], in the format [<{EXTRA}[{VALUE}]>], repeating the pattern until all numbers are serialized
 
    {EXTRA}
-      Existe 1 extra para cada dois números
+      There is 1 extra for every two numbers
 
       1 1 1 1 1 1 1 1
       | | | | | | | |
-      | | | | | | | +--- 1 bit   TEM MAIS? Caso positivo, o proximo byte também  faz parte do array, mesma estrutura
-      | | | | | | +----- 1 bit   2º int32 na sequencia é 0 = POSITIVO, 1 = NEGATIVO
-      | | | | +-+------- 2 bits  2º int32 na sequencia quantos bytes [chars] é usado 
-      | | | +----------- 1 bit   TEM MAIS
-      | | +------------- 1 bit   1º int32 na sequencia é 0 = POSITIVO, 1 = NEGATIVO
-      +-+--------------- 2 bits  1º int32 na sequencia quantos bytes [chars] é usado 
+      | | | | | | | +--- 1 bit   HAVE MORE? If so, the next byte is also part of the array, the same structure
+      | | | | | | +----- 1 bit   2nd int32 in sequence: is 0 = POSITIVE, 1 = NEGATIVE
+      | | | | +-+------- 2 bits  2nd int32 in sequence: how many bytes [chars] is used
+      | | | +----------- 1 bit   HAVE MORE?
+      | | +------------- 1 bit   1st int32 in sequence: is 0 = POSITIVE, 1 = NEGATIVE
+      +-+--------------- 2 bits  1st int32 in sequence: how many bytes [chars] is used
 
    [{VALUE}]
-      Até 4 bytes por numero sendo serializado
+      Up to 4 bytes per number being serialized
 
-   @header     {Object}    Referencia para o header
-   @field      {Object}    A referencia para o campo
-   @values     {int32[]}   Os valores que serão serializados
+   @header     {Object}    Header reference
+   @field      {Object}    The reference for the field
+   @values     {int32[]}   The values that will be serialized
 ]]
 local function encode_int32_array(header, field, values)
    if values == nil or #values == 0 then
@@ -274,7 +270,7 @@ local function encode_int32_array(header, field, values)
          value = 0 
       end
    
-      -- faz arredondamento do número, caso recebe double
+      -- rounds the number, if double
       value = math.round(value)
    
       if value < 0 then
@@ -286,7 +282,7 @@ local function encode_int32_array(header, field, values)
          byteExtra = bor(byteExtra, INT32_ARRAY_EXTRA_BITMASK_HAS_MORE[index])
       end
    
-      -- normaliza o número para o limite do int32
+      -- normalizes the number to the limit of int32
       value = math.min(INT32_MAX, math.max(0, math.abs(value)))
    
       if value <= INT8_MAX then
@@ -298,7 +294,7 @@ local function encode_int32_array(header, field, values)
       elseif value <= INT16_MAX then
          -- (2^16) -1  [2 bytes] = "11111111 11111111"
    
-         -- usa 2 bytes 
+         -- 2 bytes 
          byteExtra = bor(byteExtra, INT32_ARRAY_EXTRA_BITMASK_NUM_BYTES[index][2])
    
          -- 2 bytes
@@ -308,7 +304,7 @@ local function encode_int32_array(header, field, values)
       elseif value <= INT24_MAX then
          -- (2^24) -1  [3 bytes] = "11111111 11111111 11111111"
    
-         -- usa 3 bytes 
+         -- 3 bytes 
          byteExtra = bor(byteExtra, INT32_ARRAY_EXTRA_BITMASK_NUM_BYTES[index][3])
    
          -- 3 bytes
@@ -319,7 +315,7 @@ local function encode_int32_array(header, field, values)
       else
          -- (2^32) -1  [4 bytes] = "11111111 11111111 11111111 11111111"
    
-         -- usa 3 bytes 
+         -- 4 bytes 
          byteExtra = bor(byteExtra, INT32_ARRAY_EXTRA_BITMASK_NUM_BYTES[index][4])
    
          -- 4 bytes
@@ -363,11 +359,11 @@ local function encode_int32_array(header, field, values)
 end
 
 --[[
-   Faz a decodifiação do EXTRA de um int32, ver `encode_int32_array(header, fieldId, value)`
+   Decode the EXTRA of an int32, see `encode_int32_array(header, fieldId, value)`
 
-   @byteExtra  {byte} O {EXTRA} byte que foi gerado pelo método `encode_int32_array(header, fieldId, value)`
+   @byteExtra  {byte} The EXTRA byte that was generated by the `encode_int32_array(header, fieldId, value)` method
 
-   @return {Object} informações contidas no {EXTRA}
+   @return {Object} information contained in EXTRA
 ]]
 local function   decode_int32_array_extra_byte(byteExtra)
 
@@ -393,20 +389,20 @@ local function   decode_int32_array_extra_byte(byteExtra)
 end
 
 
-local Module = {}
-Module.encode_int32            = encode_int32
-Module.decode_int32_extra_byte       = decode_int32_extra_byte
-Module.decode_int32_bytes            = decode_int32_bytes
-Module.encode_int32_array      = encode_int32_array
-Module.decode_int32_array_extra_byte = decode_int32_array_extra_byte
-Module.INT6_MAX                      = INT6_MAX
-Module.INT8_MAX                      = INT8_MAX
-Module.INT16_MAX                     = INT16_MAX
-Module.INT24_MAX                     = INT24_MAX
-Module.INT32_MAX                     = INT32_MAX
-Module.INT_EXTRA_BITMASK_NEGATIVE    = INT_EXTRA_BITMASK_NEGATIVE
-Module.INT_EXTRA_BITMASK_IT_FITS     = INT_EXTRA_BITMASK_IT_FITS
-Module.INT_EXTRA_BITMASK_VALUE       = INT_EXTRA_BITMASK_VALUE
-Module.INT_EXTRA_BITMASK_BYTE_COUNT  = INT_EXTRA_BITMASK_BYTE_COUNT
-Module.INT_EXTRA_BITMASK_NUM_BYTES   = INT_EXTRA_BITMASK_NUM_BYTES
-return Module
+local Int32 = {}
+Int32.encode_int32                  = encode_int32
+Int32.decode_int32_extra_byte       = decode_int32_extra_byte
+Int32.decode_int32_bytes            = decode_int32_bytes
+Int32.encode_int32_array            = encode_int32_array
+Int32.decode_int32_array_extra_byte = decode_int32_array_extra_byte
+Int32.INT6_MAX                      = INT6_MAX
+Int32.INT8_MAX                      = INT8_MAX
+Int32.INT16_MAX                     = INT16_MAX
+Int32.INT24_MAX                     = INT24_MAX
+Int32.INT32_MAX                     = INT32_MAX
+Int32.INT_EXTRA_BITMASK_NEGATIVE    = INT_EXTRA_BITMASK_NEGATIVE
+Int32.INT_EXTRA_BITMASK_IT_FITS     = INT_EXTRA_BITMASK_IT_FITS
+Int32.INT_EXTRA_BITMASK_VALUE       = INT_EXTRA_BITMASK_VALUE
+Int32.INT_EXTRA_BITMASK_BYTE_COUNT  = INT_EXTRA_BITMASK_BYTE_COUNT
+Int32.INT_EXTRA_BITMASK_NUM_BYTES   = INT_EXTRA_BITMASK_NUM_BYTES
+return Int32

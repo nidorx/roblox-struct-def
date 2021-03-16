@@ -20,7 +20,7 @@ local INT53_EXTRA_BITMASK_IS_BIG       = 32  -- 00100000
 local INT53_EXTRA_BITMASK_HAS_MORE     = 16  -- 00010000
 local INT53_EXTRA_BITMASK_BYTE_COUNT   = 3   -- 00000011
 
--- quantos bytes [chars] é usado pelo resto do int53 na sequencia (4 valores)
+-- how many bytes [chars] is used by the rest of int53 in the sequence (4 values)
 local INT53_EXTRA_BITMASK_NUM_BYTES = {
    0, -- 00000000   = 1 byte
    1, -- 00000001   = 2 bytes
@@ -29,27 +29,27 @@ local INT53_EXTRA_BITMASK_NUM_BYTES = {
 }
 
 --[[
-   Lógica comum aos métodos encode_int53 e encode_int53_array
+   Logic common to the encode_int53 and encode_int53_array methods
 
-   Faz o encode de um int53, no formato <{EXTRA}[{VALUE}]?>
+   Does it encode an int53, in the format <{EXTRA} [{VALUE}]?>
 
    {EXTRA}
       1 1 1 1 1 1 1 1
       | | | | | | | |
-      | | | | | | | |
-      | | | | | | +-+--- 2 bits  quantos bytes [chars] é usado pelo int32 do resto (4 valores)
-      | | | | +-+------- 2 bits  quantos bytes [chars] é usado pelo int32 do multiplicador (4 valores)
-      | | | +----------- 1 bits  HAS_MORE? Usado pelo encode_int53_array para indicar continuidade
-      | | +------------- 1 bits  Número é maior que 32 bits, caso positivo foi quebrado em times e rest
-      | +--------------- 1 bit   descartado
-      +----------------- 1 bit   0 = POSITIVO, 1 = NEGATIVO
+      | | | | | | +-+--- 2 bits  how many bytes [chars] is used by the rest of int32 (4 values)
+      | | | | +-+------- 2 bits  how many bytes [chars] is used by the multiplier int32 (4 values)
+      | | | +----------- 1 bits  HAS_MORE? Used by encode_int53_array to indicate continuity
+      | | +------------- 1 bits  Number is greater than 32 bits, if positive it was broken in teams and rest
+      | +--------------- 1 bit   discarded
+      +----------------- 1 bit   0 = POSITIVE, 1 = NEGATIVE
 
    [{VALUE}]
-      Até 6 bytes do numero sendo serializado
+      Up to 7 bytes of the number being serialized
 
-   @header     {Object} Referencia para o header
-   @out        {array}  O output sendo gerado
-   @value      {int32}  Valor que será serializado
+   @header     {Object} Header reference
+   @out        {array}  The output being generated
+   @value      {int32}  Value that will be serialized
+   @hasMore    {bool}   Used by encode_int53_array to indicate continuity
 ]]
 local function encode_int53_out(header, out, value, hasMore)
    local byteExtra = 0
@@ -61,13 +61,13 @@ local function encode_int53_out(header, out, value, hasMore)
       byteExtra = bor(byteExtra, INT53_EXTRA_BITMASK_HAS_MORE)
    end
 
-   -- normaliza o número para o limite do int32
+   -- normalizes the number to the limit of int43
    value = math.min(INT53_MAX, math.max(0, math.abs(value)))
 
    if value <= INT8_MAX then
       -- (2^8) -1  [1 byte] = "11111111"
 
-      -- usa 1 byte 
+      -- 1 byte 
       byteExtra = bor(byteExtra, INT_EXTRA_BITMASK_NUM_BYTES[1])
       out[#out + 1] = encode_byte(header, byteExtra)
 
@@ -77,7 +77,7 @@ local function encode_int53_out(header, out, value, hasMore)
    elseif value <= INT16_MAX then
       -- (2^16) -1  [2 bytes] = "11111111 11111111"
 
-      -- usa 2 bytes 
+      -- 2 bytes 
       byteExtra = bor(byteExtra, INT_EXTRA_BITMASK_NUM_BYTES[2])
       out[#out + 1] = encode_byte(header, byteExtra)
 
@@ -88,7 +88,7 @@ local function encode_int53_out(header, out, value, hasMore)
    elseif value <= INT24_MAX then
       -- (2^24) -1  [3 bytes] = "11111111 11111111 11111111"
 
-      -- usa 3 bytes 
+      -- 3 bytes 
       byteExtra = bor(byteExtra, INT_EXTRA_BITMASK_NUM_BYTES[3])
       out[#out + 1] = encode_byte(header, byteExtra)
 
@@ -100,7 +100,7 @@ local function encode_int53_out(header, out, value, hasMore)
    elseif value <= INT32_MAX then
       -- (2^32) -1  [4 bytes] = "11111111 11111111 11111111 11111111"
 
-      -- usa 3 bytes 
+      -- 4 bytes 
       byteExtra = bor(byteExtra, INT_EXTRA_BITMASK_NUM_BYTES[4])
       out[#out + 1] = encode_byte(header, byteExtra)
 
@@ -111,10 +111,10 @@ local function encode_int53_out(header, out, value, hasMore)
       out[#out + 1] = encode_byte(header, band(value, 0xFF))
 
    else
-      -- número maior que 32 bits, não é possível fazer manipulação usando a lib bit32, necessário quebrar o número
-      -- desse modo cabe em até 6 bytes
+      -- number greater than 32 bits, it is not possible to manipulate using the bit32 lib, it is necessary to 
+      -- break the number so it fits in up to 7 bytes
 
-      -- número é grande
+      -- number is big
       byteExtra = bor(byteExtra, INT53_EXTRA_BITMASK_IS_BIG)
 
       local times = math.floor(value/INT32_MAX)-1
@@ -122,7 +122,7 @@ local function encode_int53_out(header, out, value, hasMore)
 
       local bytes = {}
 
-      -- numero de bytes usados pelo multiplicador (até 2)
+      -- number of bytes used by the multiplier (up to 3)
       if times <= INT8_MAX then
          bytes[#bytes + 1] = times
 
@@ -138,7 +138,7 @@ local function encode_int53_out(header, out, value, hasMore)
          bytes[#bytes + 1] = band(times, 0xFF)
       end 
 
-      -- número de bytes usado pela sobra, até 4
+      -- number of bytes used by the rest, up to 4
       if rest <= INT8_MAX then
          bytes[#bytes + 1] = rest
 
@@ -173,11 +173,11 @@ local function encode_int53_out(header, out, value, hasMore)
 end
 
 --[[
-   Faz o encode de um int53, no formato <{EXTRA}[{VALUE}]?>, ver `encode_int53_out(header, out, value)`
+   Does the encode of an int53, in the format <{EXTRA}[{VALUE}]?>, See `encode_int53_out(header, out, value)`
 
-   @header     {Object} Referencia para o header
-   @field      {Object} A referencia para o campo
-   @value      {int32}  Valor que será serializado
+   @header     {Object} Header reference
+   @field      {Object} The reference for the field
+   @value      {int32}  Value that will be serialized
 ]]
 local function encode_int53(header, field, value)
 
@@ -186,7 +186,7 @@ local function encode_int53(header, field, value)
       return '' 
    end
 
-   -- faz arredondamento do número, caso receba double
+   -- rounds the number, if double
    value = math.round(value)
    if value == 0 then
       -- ignore
@@ -203,11 +203,11 @@ local function encode_int53(header, field, value)
 end
 
 --[[
-   Faz a decodifiação do EXTRA de um int53, ver `encode_int53(header, fieldId, value)`
+   Decode the EXTRA of an int 53, see `encode_int53(header, fieldId, value)`
 
-   @byteExtra  {byte} O {EXTRA} byte que foi gerado pelo método `encode_int53(header, fieldId, value)`
+   @byteExtra  {byte} The EXTRA byte that was generated by the `encode_int53 (header, fieldId, value)` method
 
-   @return {Object} informações contidas no {EXTRA}
+   @return {Object} information contained in EXTRA
 ]]
 local function decode_int53_extra_byte(byteExtra)
   
@@ -222,12 +222,12 @@ local function decode_int53_extra_byte(byteExtra)
 end
 
 --[[
-   Faz a decodifiação dos bytes que compoem um int53, apenas quando é BIG, ver função `encode_int53(header, fieldId, value)` 
+   Decodes the bytes that make up an int53, only when it is BIG, see function `encode_int53(header, fieldId, value)`
 
-   @bytes      {byte[]} O bytes que foram gerados pelo método `encode_int53(header, fieldId, value)`
-   @isNegative {bool}   O valor é negativo (informação está no {EXTRA} byte)
-   @timesLen   {number} Quantos bytes faz parte do multiplicador x32
-   @restLen    {number} Quantos bytes faz parte do resto
+   @bytes      {byte[]} The bytes that were generated by the `encode_int53(header, fieldId, value)` method
+   @isNegative {bool}   The value is negative (information is in the EXTRA byte)
+   @timesLen   {number} How many bytes is part of the x32 multiplier
+   @restLen    {number} How many bytes is part of the rest
 
    @return {int53}
 ]]
@@ -265,27 +265,13 @@ local function decode_int53_bytes(bytes, isNegative, timesBytes, restBytes)
 end
 
 --[[
-   Faz o encode de um int53[], no formato [<{EXTRA}[{VALUE}]>], repetindo o padrão até que todos os numeros sejam 
-   serializados
+   Encodes an int53 [], in the format [<{EXTRA} [{VALUE}]>], repeating the pattern until all numbers are serialized
 
-   {EXTRA}
-      1 1 1 1 1 1 1 1
-      | | | | | | | |
-      | | | | | | | |
-      | | | | | | +-+--- 2 bits  quantos bytes [chars] é usado pelo int32 do resto (4 valores)
-      | | | | +-+------- 2 bits  quantos bytes [chars] é usado pelo int32 do multiplicador (4 valores)
-      | | | +----------- 1 bits  HAS MORE? Indica que possui mais números na sequencia
-      | | +------------- 1 bits  Número é maior que 32 bits, caso positivo foi quebrado em times e rest
-      | +--------------- 1 bit   número cabe nos proximos bits? Se número for <= 63 (2^6) o seu conteúdo já é
-      |                          formado pelos proximos bits.
-      +----------------- 1 bit   0 = POSITIVO, 1 = NEGATIVO
+   See `encode_int53(header, fieldId, value)`
 
-   [{VALUE}]
-      Até 6 bytes por numero sendo serializado
-
-   @header     {Object}    Referencia para o header
-   @field      {Object}    A referencia para o campo
-   @values     {int53[]}   Os valores que serão serializados
+   @header     {Object}    Header reference
+   @field      {Object}    The reference for the field
+   @values     {int53[]}   The values that will be serialized
 ]]
 local function encode_int53_array(header, field, values)
    if values == nil or #values == 0 then
@@ -306,7 +292,7 @@ local function encode_int53_array(header, field, values)
          value = 0
       end
    
-      -- faz arredondamento do número, caso receba double
+      -- rounds the number, if double
       value = math.round(value)
 
       encode_int53_out(header, out, value, i ~= len)
@@ -315,11 +301,10 @@ local function encode_int53_array(header, field, values)
    return table.concat(out, '')
 end
 
-local Module = {}
-Module.encode_int53_out          = encode_int53_out
-Module.encode_int53              = encode_int53
-Module.decode_int53_extra_byte   = decode_int53_extra_byte
-Module.decode_int53_bytes        = decode_int53_bytes
-Module.encode_int53_array        = encode_int53_array
-Module.INT53_MAX                 = INT53_MAX
-return Module
+local Int53 = {}
+Int53.encode_int53              = encode_int53
+Int53.decode_int53_extra_byte   = decode_int53_extra_byte
+Int53.decode_int53_bytes        = decode_int53_bytes
+Int53.encode_int53_array        = encode_int53_array
+Int53.INT53_MAX                 = INT53_MAX
+return Int53

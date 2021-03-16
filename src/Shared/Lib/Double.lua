@@ -1,16 +1,5 @@
 local bor, band, rshift, lshift = bit32.bor, bit32.band, bit32.rshift, bit32.lshift
 
---[[
-   var n = 5.666000
-   var int = Math.floor(n)
-   var dec = Math.min(Math.floor((n - int) * 100000), 65535)
-   console.log(n, int, int.toString(2), dec, dec.toString(2))
-   var n2 = int + Math.min(dec/100000, 65535)
-   console.log(n2)
-
-   https://en.wikipedia.org/wiki/Double-precision_floating-point_format
-]]
-
 local Core = require(game.ReplicatedStorage:WaitForChild('Lib'):WaitForChild('Core'))
 local encode_byte                      = Core.encode_byte
 local encode_field                     = Core.encode_field
@@ -35,7 +24,7 @@ local DBL_EXTRA_BITMASK_HAS_DEC     = 4   -- 00000100
 local DBL_EXTRA_BITMASK_DEC_BYTES   = 2   -- 00000010
 local DBL_EXTRA_BITMASK_HAS_MORE    = 1   -- 00000001
 
--- quantos bytes [chars] é usado pelo int32 do resto (4 valores)
+-- how many bytes [chars] is used by the rest of int32 (4 values)
 local DBL_EXTRA_BITMASK_INT_REST = {
    0,    -- 00000000   = 1 byte
    8,    -- 00001000   = 2 bytes
@@ -51,31 +40,31 @@ local DBL_EXTRA_BITMASK_INT_MULT = {
 }
 
 --[[
-   Lógica comum aos métodos encode_double e encode_double_array
+   Logic common to the encode_double and encode_double_array methods
 
-   Faz o encode de um double, no formato <{EXTRA}[{VALUE}]?>
+   Does it encode a double, in the format <{EXTRA} [{VALUE}]?>
 
    {EXTRA}
       1 1 1 1 1 1 1 1
       | | | | | | | |
       | | | | | | | |
-      | | | | | | | +--- 1 bits  HAS_MORE? Usado pelo encode_double_array para indicar continuidade
-      | | | | | | +----- 1 bit   quantos bytes [chars] é usado pelos decimais (2 valores)
-      | | | | | +------- 1 bit   Número possui decimais
-      | | | +-+--------- 2 bits  quantos bytes [chars] é usado pelo int32 do resto (4 valores)
-      | +-+------------- 2 bits  quantos bytes [chars] é usado pelo int32 do multiplicador (4 valores), quando BIG
-      +----------------- 1 bit   0 = POSITIVO, 1 = NEGATIVO
+      | | | | | | | +--- 1 bits  HAS_MORE? Used by encode_double_array to indicate continuity
+      | | | | | | +----- 1 bit   how many bytes [chars] is used by the decimals (2 values)
+      | | | | | +------- 1 bit   Number has decimals
+      | | | +-+--------- 2 bits  how many bytes [chars] is used by the rest of int32 (4 values)
+      | +-+------------- 2 bits  how many bytes [chars] is used by the multiplier int32 (4 values), when BIG
+      +----------------- 1 bit   0 = POSITIVE, 1 = NEGATIVE
 
    [{VALUE}]
-      Até 8 bytes do numero sendo serializado, sendo
-         - até 2 bytes para o multiplicador da parte inteira
-         - até 4 bytes para o resto da parte inteira
-         - até 2 bytes para os decimais (limitado portanto até 65535)
+      Up to 8 bytes of the number being serialized, being
+         - up to 2 bytes for the entire part multiplier
+         - up to 4 bytes for the rest of the entire part
+         - up to 2 bytes for decimals
 
-   @header     {Object} Referencia para o header
-   @out        {array}  O output sendo gerado
-   @value      {int32}  Valor que será serializado
-   @hasMore    {bool}   Quando array, permite definir se existem mais números na sequencia
+   @header     {Object} Header reference
+   @out        {array}  The output being generated
+   @value      {int32}  Value that will be serialized
+   @hasMore    {bool}   When array, allows to define if there are more numbers in the sequence
 ]]
 local function encode_double_out(header, out, value, hasMore)
 
@@ -98,7 +87,7 @@ local function encode_double_out(header, out, value, hasMore)
       hasDecimal = true 
    end
    
-   -- normaliza o número para o limite do int53
+   -- normalizes the number to the limit of int53
    int53 = math.min(INT53_MAX, math.max(0, int53))
 
    local bytes = {}
@@ -112,7 +101,7 @@ local function encode_double_out(header, out, value, hasMore)
    elseif int53 <= INT16_MAX then
       -- (2^16) -1  [2 bytes] = "11111111 11111111"
 
-      -- usa 2 bytes 
+      -- 2 bytes 
       byteExtra = bor(byteExtra, DBL_EXTRA_BITMASK_INT_REST[2])
 
       -- 2 bytes
@@ -143,13 +132,13 @@ local function encode_double_out(header, out, value, hasMore)
       bytes[#bytes + 1] = band(int53, 0xFF)
 
    else
-      -- número maior que 32 bits, não é possível fazer manipulação usando a lib bit32, necessário quebrar o número
-      -- desse modo cabe em até 6 bytes
+      -- number greater than 32 bits, it is not possible to manipulate using the bit32 lib, it is necessary to 
+      -- break the number so it fits in up to 7 bytes
 
       local times = math.floor(int53/INT32_MAX)-1
       local rest = int53 - (times+1)*INT32_MAX
 
-      -- numero de bytes usados pelo multiplicador (até 2)
+      -- number of bytes used by the multiplier (up to 3)
       if times <= INT8_MAX then
          byteExtra = bor(byteExtra, DBL_EXTRA_BITMASK_INT_MULT[2])
          bytes[#bytes + 1] = times
@@ -166,7 +155,7 @@ local function encode_double_out(header, out, value, hasMore)
          bytes[#bytes + 1] = band(times, 0xFF)
       end 
 
-      -- número de bytes usado pela sobra, até 4
+      -- number of bytes used by the rest, up to 4
       if rest <= INT8_MAX then
          bytes[#bytes + 1] = rest
 
@@ -192,10 +181,8 @@ local function encode_double_out(header, out, value, hasMore)
    end
 
    if hasDecimal then 
-      -- numero de bytes usados pelo decimal (até 2)
+      -- number of bytes used by the decimal (up to 2)
       byteExtra = bor(byteExtra, DBL_EXTRA_BITMASK_HAS_DEC)
-
-      
 
       if dec <= INT8_MAX then
          bytes[#bytes + 1] = dec
@@ -216,11 +203,11 @@ local function encode_double_out(header, out, value, hasMore)
 end
 
 --[[
-   Faz o encode de um int53, no formato <{EXTRA}[{VALUE}]?>, ver `encode_double_out(header, out, value)`
+   Does the encode of an int53, in the format <{EXTRA}[{VALUE}]?>, See `encode_double_out(header, out, value)`
 
-   @header     {Object} Referencia para o header
-   @field      {Object} A referencia para o campo
-   @value      {double} Valor que será serializado
+   @header     {Object} Header reference
+   @field      {Object} The reference for the field
+   @value      {double} Value that will be serialized
 ]]
 local function encode_double(header, field, value)
 
@@ -239,14 +226,13 @@ local function encode_double(header, field, value)
 end
 
 --[[
-   Faz o encode de um double[], no formato [<{EXTRA}[{VALUE}]>], repetindo o padrão até que todos os numeros sejam 
-   serializados
+   Encodes a double [], in the format [<{EXTRA}[{VALUE}]>], repeating the pattern until all numbers are serialized
 
-   ver `encode_double(header, field, value)`
+   see `encode_double(header, field, value)`
 
-   @header     {Object}    Referencia para o header
-   @field      {Object}    A referencia para o campo
-   @values     {double[]}  Os valores que serão serializados
+   @header     {Object}    Header reference
+   @field      {Object}    The reference for the field
+   @values     {double[]}  The values that will be serialized
 ]]
 local function encode_double_array(header, field, values)
    if values == nil or #values == 0 then
@@ -275,11 +261,11 @@ end
 
 
 --[[
-   Faz a decodifiação do EXTRA de um double, ver `encode_double(header, fieldId, value)`
+   Decodes the EXTRA of a double, see `encode_double(header, fieldId, value)`
 
-   @byteExtra  {byte} O {EXTRA} byte que foi gerado pelo método `encode_double(header, fieldId, value)`
+   @byteExtra  {byte} The EXTRA byte that was generated by the `encode_double(header, fieldId, value)` method
 
-   @return {Object} informações contidas no {EXTRA}
+   @return {Object} information contained in EXTRA
 ]]
 local function decode_double_extra_byte(byteExtra)
    local extra = {}
@@ -294,25 +280,14 @@ local function decode_double_extra_byte(byteExtra)
 end
 
 --[[
-   Faz a decodifiação dos bytes que compoem um double, ver função `encode_double(header, fieldId, value)` 
+   Decodes the bytes that make up a double, see function `encode_double(header, fieldId, value)`
 
-   @bytes   {byte[]} O bytes que foram gerados pelo método `encode_double(header, fieldId, value)`
-   @extra   {Object} As informações extraidas pelo método `decode_double_extra_byte(byteExtra)`
+   @bytes   {byte[]} The bytes that were generated by the `encode_double(header, fieldId, value)` method
+   @extra   {Object} Information extracted by the `decode_double_extra_byte(byteExtra)`
 
    @return {double}
 ]]
 local function decode_double_bytes(bytes, extra) 
-
-   --[[
-      var n = 1.61325535
-      var int = Math.floor(n)
-      var dec = Math.min(Math.floor((n - int) * 100000), 65535)
-      console.log(n, int, int.toString(2), dec, dec.toString(2))
-      var n2 = int + Math.min(dec/100000, 65535)
-      console.log(n2)
-
-      https://en.wikipedia.org/wiki/Double-precision_floating-point_format
-   ]]
 
    local times, rest, int
    
@@ -381,9 +356,9 @@ local function decode_double_bytes(bytes, extra)
    return value
 end
 
-local Module = {}
-Module.encode_double             = encode_double
-Module.decode_double_extra_byte  = decode_double_extra_byte
-Module.decode_double_bytes       = decode_double_bytes
-Module.encode_double_array       = encode_double_array
-return Module
+local Double = {}
+Double.encode_double             = encode_double
+Double.decode_double_extra_byte  = decode_double_extra_byte
+Double.decode_double_bytes       = decode_double_bytes
+Double.encode_double_array       = encode_double_array
+return Double
