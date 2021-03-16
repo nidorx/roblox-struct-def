@@ -5,7 +5,7 @@
 
 local EMPTY_VEC3 = Vector3.new(0, 0, 0)
 
-local Conversors = {
+local Converters = {
    [Vector3] = {
       -- Single
       {
@@ -78,4 +78,4 @@ local Conversors = {
 }
 
 
-return Conversors
+return Converters
