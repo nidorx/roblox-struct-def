@@ -120,7 +120,7 @@ Fields = {
 
 
 
-> The `ToSerialize` and` ToInstance` methods allow customization of the data, both to serialize and to instantiate. Internally it is used in [Roblox standard type converters] (https://github.com/nidorx/roblox-schema/blob/main/src/Shared/Lib/Converters.lua)
+> The `ToSerialize` and` ToInstance` methods allow customization of the data, both to serialize and to instantiate. Internally it is used in [Roblox standard type converters] (https://github.com/nidorx/roblox-struct-def/blob/main/src/Shared/Lib/Converters.lua)
 
 
 ### Assigning Ids
@@ -273,7 +273,7 @@ print(AvatarSchema:Serialize(data))
 
 StructDef allows the use of several standard [Roblox types](https://developer.roblox.com/en-us/api-reference/data-types) as a data type. Internally it is converted to one of the primitive types above.
 
-> **Work in progress!**  You can contribute by creating new converters in the [Converters.lua](https://github.com/nidorx/roblox-schema/blob/main/src/Shared/Lib/Converters.lua)
+> **Work in progress!**  You can contribute by creating new converters in the [Converters.lua](https://github.com/nidorx/roblox-struct-def/blob/main/src/Shared/Lib/Converters.lua)
  file and making a pull request
 
 - Vector3
