@@ -290,7 +290,7 @@ StructDef allows the use of several standard [Roblox types](https://developer.ro
 - Vector3
 - <s>Vector3Value</s>
 - <s>Vector2</s>
-- <s>CFrame</s>
+- CFrame
 - <s>CFrameValue</s>
 - <s>Color3</s>
 - <s>Color3Value</s>
@@ -306,7 +306,6 @@ StructDef allows the use of several standard [Roblox types](https://developer.ro
 - <s>NumberValue</s>
 - <s>DoubleConstrainedValue</s>
 - <s>StringValue</s>
-
 
 ```lua
 local MySchema = StructDef.Schema(1)
