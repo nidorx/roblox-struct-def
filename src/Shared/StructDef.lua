@@ -359,16 +359,16 @@ local function deserialize(content, all)
                -- 01000101 & 000001
                if band(byte, mask) == 0 then
                   if inHeaderBit2 then 
-                     -- byte maior que 92 e menor que 184
+                     -- byte greater than 92 and less than 184
                      table.insert(header.shift, 1)
                      inHeaderBit2 = false
                   else
-                     -- byte menor que 92 
+                     -- byte less than 92
                      table.insert(header.shift, 0)
                   end
                else 
                   if inHeaderBit2 then  
-                     -- byte maior que 184
+                     -- byte greater than 184
                      table.insert(header.shift, 2)
                      inHeaderBit2 = false
                   else
@@ -938,7 +938,7 @@ local function parse_primitive_field(fieldType, field, options)
 end
 
 --[[
-   Permite adicionar um campo no Schema
+   Allows to add a Field in the Schema
 ]]
 function Schema:Field(id, name, fieldType, options)
 
@@ -988,7 +988,7 @@ function Schema:Field(id, name, fieldType, options)
       end
 
    else
-      -- Verifica se é referencia para Vector3 ou outras classes padrões do Roblox
+      -- Checks if it is a reference for Vector3 or other Roblox standard classes
       local converter = Converters[fieldType]
       if converter == nil then
          error('Field data type is invalid')

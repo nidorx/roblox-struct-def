@@ -68,7 +68,7 @@ local function encode_bool_array(header, field, value)
 
    local len = table.getn(value)
    if value == nil or len == 0 then
-      -- listas vazias são ignoradas
+      -- empty lists are ignored
       return '' 
    end
 
@@ -84,7 +84,7 @@ local function encode_bool_array(header, field, value)
          byte = bor(byte, BOOL_ARRAY_BITMASK_COUNT_VALUES[4])
       
          if i < len then
-            -- TEM MAIS
+            -- has more
             byte = bor(byte, 1)
          end
          

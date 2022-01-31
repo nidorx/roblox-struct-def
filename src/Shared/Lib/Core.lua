@@ -29,7 +29,7 @@ local FIELD_TYPE_BITMASK_INT53       = 96  -- 01100000
 local FIELD_TYPE_BITMASK_DOUBLE      = 128 -- 10000000
 local FIELD_TYPE_BITMASK_STRING      = 160 -- 10100000
 local FIELD_TYPE_BITMASK_SCHEMA      = 192 -- 11000000
-local FIELD_TYPE_BITMASK_SCHEMA_END  = 224 -- 11100000 - Marca o fim de um schema
+local FIELD_TYPE_BITMASK_SCHEMA_END  = 224 -- 11100000 - Marks the end of a schema
 
 --[[
    Bit mask used to extract data from a header byte, according to the model
