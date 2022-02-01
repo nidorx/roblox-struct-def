@@ -5,6 +5,7 @@
 
 local EMPTY_VEC3 = Vector3.new(0, 0, 0)
 local EMPTY_CFRAME = CFrame.new()
+local EMPTY_COLOR3 = Color3.new(1, 1, 1)
 
 local Converters = {
    [Vector3] = {
@@ -194,11 +195,80 @@ local Converters = {
                return out
             end
       
-            for i = 1, #value, 3 do
+            for i = 1, #value, 12 do
                out[#out+1] = CFrame.new(value[i], value[i+1], value[i+2],
                                        value[i+3], value[i+4], value[i+5],
                                        value[i+6], value[i+7], value[i+8],
                                        value[i+9], value[i+10], value[i+11])
+            end
+            return out
+         end
+      }
+   },
+   [Color3] = {
+      -- Single
+      {
+         -- type
+         'int32[]',
+         -- default
+         EMPTY_COLOR3,
+         -- To Serialize
+         function (schema, field, value)
+            local out = {}
+         
+            if typeof(value) ~= 'Color3' then 
+               out[#out+1] = 255
+               out[#out+1] = 255
+               out[#out+1] = 255
+            else
+               out[#out+1] = math.floor(value.R * 255)
+               out[#out+1] = math.floor(value.G * 255)
+               out[#out+1] = math.floor(value.B * 255)
+            end
+         
+            return out
+         end, 
+         -- To Instance
+         function(schema, field, value)
+            if value == nil then
+               return EMPTY_COLOR33
+            end
+            return Color3.fromRGB(value[1], value[2], value[3])
+         end
+      },
+      -- Array
+      {
+         -- type
+         'int32[]',
+         -- default
+         {},
+         -- To Serialize
+         function(schema, field, value)    
+            local out = {}
+         
+            for _, col3 in ipairs(value) do
+               if typeof(col3) ~= 'Color3' then 
+                  out[#out+1] = 255
+                  out[#out+1] = 255
+                  out[#out+1] = 255
+               else
+                  out[#out+1] = math.floor(col3.R)
+                  out[#out+1] = math.floor(col3.G)
+                  out[#out+1] = math.floor(col3.B)
+               end
+            end
+         
+            return out
+         end, 
+         -- To Instance         
+         function(schema, field, value)      
+            local out = {}
+            if value == nil or #value == 0 then 
+               return out
+            end
+      
+            for i = 1, #value, 3 do
+               out[#out+1] = Color3.fromRGB(value[i], value[i+1], value[i+2])
             end
             return out
          end

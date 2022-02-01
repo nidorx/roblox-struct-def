@@ -292,7 +292,7 @@ StructDef allows the use of several standard [Roblox types](https://developer.ro
 - <s>Vector2</s>
 - CFrame
 - <s>CFrameValue</s>
-- <s>Color3</s>
+- Color3
 - <s>Color3Value</s>
 - <s>BrickColor</s>
 - <s>DateTime</s>
