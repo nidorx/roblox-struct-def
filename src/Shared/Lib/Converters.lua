@@ -3,11 +3,77 @@
    https://developer.roblox.com/en-us/api-reference/data-types
 ]]
 
+local EMPTY_VEC2 = Vecto2.new(0, 0)
 local EMPTY_VEC3 = Vector3.new(0, 0, 0)
 local EMPTY_CFRAME = CFrame.new()
 local EMPTY_COLOR3 = Color3.new(1, 1, 1)
 
 local Converters = {
+   [Vector2] = {
+      -- Single
+      {
+         -- type
+         'double[]',
+         -- default
+         EMPTY_VEC2,
+         -- To Serialize
+         function (schema, field, value)
+            local out = {}
+         
+            if typeof(value) ~= 'Vector2' then 
+               out[#out+1] = 0
+               out[#out+1] = 0
+            else
+               out[#out+1] = value.X
+               out[#out+1] = value.Y
+            end
+         
+            return out
+         end, 
+         -- To Instance
+         function(schema, field, value)
+            if value == nil then
+               return EMPTY_VEC2
+            end
+            return Vector2.new(value[1], value[2])
+         end
+      },
+      -- Array
+      {
+         -- type
+         'double[]',
+         -- default
+         {},
+         -- To Serialize
+         function(schema, field, value)    
+            local out = {}
+         
+            for _, vec2 in ipairs(value) do
+               if typeof(vec3) ~= 'Vector2' then 
+                  out[#out+1] = 0
+                  out[#out+1] = 0
+               else
+                  out[#out+1] = vec2.X
+                  out[#out+1] = vec2.Y
+               end
+            end
+         
+            return out
+         end,
+         -- To Instance
+         function(schema, field, value)
+            local out = {}
+            if value == nil or #value == 0 then 
+               return out
+            end
+      
+            for i = 1, #value, 2 do
+               out[#out+1] = Vector2.new(value[i], value[i+1])
+            end
+            return out
+         end
+      }
+   },
    [Vector3] = {
       -- Single
       {
