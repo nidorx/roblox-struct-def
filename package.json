@@ -12,5 +12,9 @@
       "luamin": "1.0.4",
       "mkdirp": "1.0.4",
       "rimraf": "3.0.2"
+   },
+   "dependencies": {
+      "@rbxts/types": "^1.0.571",
+      "@types/core-js": "^2.5.5"
    }
 }
