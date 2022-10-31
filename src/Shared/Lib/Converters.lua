@@ -10,6 +10,8 @@ local EMPTY_V2I16 = Vector2int16.new(0,0)
 local EMPTY_UDIM = UDim.new(0,0)
 local EMPTY_UDIM2 = UDim2.new(0, 0, 0, 0)
 local EMPTY_C3 = Color3.fromRGB(0,0,0)
+local EMPTY_CS = ColorSequence.new(EMPTY_C3)
+local EMPTY_CSK = ColorSequenceKeypoint.new(0,EMPTY_C3)
 
 local Converters = {
 	[Vector3] = {
@@ -486,8 +488,178 @@ local Converters = {
 				return out
 			end
 		}
+	},
+	[ColorSequence] = {
+		-- Single
+		{
+			-- type
+			'double[]',
+			-- default
+			EMPTY_CS,
+			-- To Serialize
+			function (schema, field, value)
+				local out = {}
+
+				if typeof(value) ~= 'ColorSequence' then 
+					out[#out+1] = 0
+					out[#out+1] = 0
+					out[#out+1] = 0
+					out[#out+1] = 0
+				else
+					for _, kp in ipairs(value.Keypoints) do
+						out[#out+1] = kp.Time
+						out[#out+1] = kp.Value.R
+						out[#out+1] = kp.Value.G
+						out[#out+1] = kp.Value.B
+					end
+				end
+
+				return out
+			end, 
+			-- To Instance
+			function(schema, field, value)
+				if value == nil then
+					return EMPTY_CS
+				end
+				local keypoints = {}
+				for i = 1, #value, 4 do
+					table.insert(keypoints, ColorSequenceKeypoint.new(value[i], Color3.new(value[i+1], value[i+2], value[i+3])))
+				end
+				return ColorSequence.new(keypoints)
+			end
+		},
+		-- Array
+		{
+			-- type
+			'double[]',         
+			-- default                              
+			{},                                             
+			-- To Serialize
+			function(schema, field, value)    
+				local out = {}
+
+				for _, cs in ipairs(value) do
+					if typeof(cs) ~= 'ColorSequence' then 
+						out[#out+1] = 0
+						out[#out+1] = 0
+						out[#out+1] = 0
+						out[#out+1] = 0
+					else
+						for _, kp in ipairs(cs.Keypoints) do
+							out[#out+1] = kp.Time
+							out[#out+1] = kp.Value.R
+							out[#out+1] = kp.Value.G
+							out[#out+1] = kp.Value.B
+						end
+						out[#out+1] = 2 --// Identifier to split between ColorSequences
+					end
+				end
+
+				return out
+			end, 
+			-- To Instance         
+			function(schema, field, value)      
+				local out = {}
+				if value == nil or #value == 0 then 
+					return out
+				end
+				
+				local cstotal = 0
+				for _, val in ipairs(value) do
+					if val == 2 then
+						cstotal = cstotal + 1
+					end
+				end
+				
+				local cvindex = 1
+				for _ = 1, cstotal do
+					local keypoints = {}
+					for i = cvindex, #value, 4 do
+						cvindex = cvindex + 1
+						if value[i] == 2 then break end
+						table.insert(keypoints, ColorSequenceKeypoint.new(value[i], Color3.new(value[i+1], value[i+2], value[i+3])))
+					end
+					out[#out+1] = ColorSequence.new(keypoints)
+				end
+				
+				return out
+			end
+		}
+	},
+	[ColorSequenceKeypoint] = {
+		-- Single
+		{
+			-- type
+			'double[]',
+			-- default
+			EMPTY_CSK,
+			-- To Serialize
+			function (schema, field, value)
+				local out = {}
+
+				if typeof(value) ~= 'ColorSequenceKeypoint' then 
+					out[#out+1] = 0
+					out[#out+1] = 0
+					out[#out+1] = 0
+					out[#out+1] = 0
+				else
+					out[#out+1] = value.Time
+					out[#out+1] = value.Value.R
+					out[#out+1] = value.Value.G
+					out[#out+1] = value.Value.B
+				end
+
+				return out
+			end, 
+			-- To Instance
+			function(schema, field, value)
+				if value == nil then
+					return EMPTY_CSK
+				end
+				return ColorSequenceKeypoint.new(value[1], Color3.new(value[2], value[3], value[4]))
+			end
+		},
+		-- Array
+		{
+			-- type
+			'double[]',         
+			-- default                              
+			{},                                             
+			-- To Serialize
+			function(schema, field, value)    
+				local out = {}
+
+				for _, csk in ipairs(value) do
+					if typeof(csk) ~= 'ColorSequenceKeypoint' then 
+						out[#out+1] = 0
+						out[#out+1] = 0
+						out[#out+1] = 0
+						out[#out+1] = 0
+					else
+						out[#out+1] = csk.Time
+						out[#out+1] = csk.Value.R
+						out[#out+1] = csk.Value.G
+						out[#out+1] = csk.Value.B
+					end
+				end
+
+				return out
+			end, 
+			-- To Instance         
+			function(schema, field, value)      
+				local out = {}
+				if value == nil or #value == 0 then 
+					return out
+				end
+
+				for i = 1, #value, 4 do
+					out[#out+1] = ColorSequenceKeypoint.new(value[i], Color3.new(value[i+1], value[i+2], value[i+3]))
+				end
+
+				return out
+			end
+		}
 	}
 }
-
 
 return Converters
